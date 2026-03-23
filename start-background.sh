@@ -35,7 +35,7 @@ if [ -f "./browsers/google-chrome-stable_current_amd64.deb" ]; then
     fi
 fi
 
-mkdir -p logs
+mkdir -p data logs
 env $BROWSER_ENV nohup "$NODE_BIN" app/index.js > logs/runtime.log 2>&1 &
 
 echo ""
