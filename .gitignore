@@ -1,0 +1,26 @@
+# Data
+data/
+browser_data/
+app/trajectory_history/
+logs/
+debug/
+
+# License
+license.key
+.license_cache
+
+# Large local/runtime dependencies
+node/
+node_modules/
+browsers/*.deb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Lock files (optional - keep node_modules lock)
+# package-lock.json
