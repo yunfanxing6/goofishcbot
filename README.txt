@@ -25,10 +25,15 @@
 1. 给脚本添加执行权限
    chmod +x *.sh
 
-2. 启动程序（三选一）
-   
-   方式一：控制台模式
-   ./start.sh
+2. 安装运行依赖
+   cd app
+   npm install --omit=dev
+   cd ..
+
+3. 启动程序（三选一）
+    
+    方式一：控制台模式
+    ./start.sh
    
    方式二：后台模式
    ./start-background.sh
@@ -39,15 +44,15 @@
    停止：./stop-pm2.sh
    开机自启：pm2 save && pm2 startup
 
-3. 访问系统
+4. 访问系统
    http://localhost:3000
    或 http://服务器IP:3000
 
-4. 停止程序
+5. 停止程序
    普通/后台模式：./stop.sh
    PM2 模式：./stop-pm2.sh
 
-5. 查看日志（后台模式）
+6. 查看日志（后台模式）
    tail -f logs/runtime.log
 
 【文件说明】
@@ -63,6 +68,7 @@
 - 请确保 public 文件夹与 goofishcbot 在同一目录
 - 首次使用前请先安装 Node.js
 - 首次使用前请先安装 Google Chrome
+- 首次运行前请先执行 `cd app && npm install --omit=dev`
 - 如需外网访问，请开放 3000 端口
 
 如有问题，请联系管理员。
