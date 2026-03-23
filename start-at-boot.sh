@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-mkdir -p logs
+mkdir -p data logs
 LOG_FILE="$SCRIPT_DIR/logs/boot-start.log"
 NODE_BIN="$SCRIPT_DIR/node/bin/node"
 
