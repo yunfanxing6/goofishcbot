@@ -15,7 +15,7 @@ if [ -x "$SCRIPT_DIR/node/bin/node" ]; then
 fi
 
 # 检查是否已在运行
-if pgrep -f "app/index.js" > /dev/null; then
+if pgrep -f "app/(open-source-launcher\.mjs|index\.js)" > /dev/null; then
     echo "程序已在运行中！"
     echo "如需重启，请先运行 ./stop.sh"
     exit 1
@@ -35,8 +35,8 @@ if [ -f "./browsers/google-chrome-stable_current_amd64.deb" ]; then
     fi
 fi
 
-mkdir -p data logs
-env $BROWSER_ENV nohup "$NODE_BIN" app/index.js > logs/runtime.log 2>&1 &
+mkdir -p logs
+env $BROWSER_ENV nohup "$NODE_BIN" app/open-source-launcher.mjs > logs/runtime.log 2>&1 &
 
 echo ""
 echo "========================================"

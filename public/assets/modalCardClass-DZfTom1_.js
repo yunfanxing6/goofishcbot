@@ -1,0 +1,1 @@
+function e(e){return e===`dark`?`border-slate-600 bg-slate-900 text-white`:e===`modern`?`border-stone-200 bg-[#fbf8f4] text-stone-900`:`border-slate-200 bg-white text-slate-900`}export{e as t};

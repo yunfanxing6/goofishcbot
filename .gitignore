@@ -1,5 +1,6 @@
 # Data
 data/
+app/data/
 browser_data/
 app/trajectory_history/
 logs/
@@ -8,11 +9,15 @@ debug/
 # License
 license.key
 .license_cache
+app/license.key
+app/.license_cache
+app/.open-source-index.js
 
 # Large local/runtime dependencies
 node/
 node_modules/
 browsers/*.deb
+app/package-lock.json
 
 # OS
 .DS_Store

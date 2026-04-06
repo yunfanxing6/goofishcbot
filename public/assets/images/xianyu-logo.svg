@@ -10,11 +10,8 @@
       <stop offset="100%" style="stop-color:#fff;stop-opacity:0"/>
     </linearGradient>
   </defs>
-  <!-- 圆角矩形背景 - 闲鱼黄渐变 -->
   <rect width="128" height="128" rx="28" ry="28" fill="url(#xianyuBg)"/>
-  <!-- 顶部高光 -->
   <rect width="128" height="64" rx="28" ry="0" fill="url(#xianyuShine)" opacity="0.6"/>
-  <!-- 个性化 Z 字：比例拉高，白色描边，圆角端点 -->
   <g transform="translate(64,64)" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
     <path d="M-24 -18 L 24 -18 M 24 -18 L -24 18 M -24 18 L 24 18"/>
   </g>

@@ -633,17 +633,17 @@
     }
   });
 
-  // src/lib/shared/constants.ts
+  // conversation-lit/lib/shared/constants.ts
   var API_BASE = "";
 
-  // src/lib/shared/auth/token.ts
+  // conversation-lit/lib/shared/auth/token.ts
   var TOKEN_KEY = "auth_token";
   function getToken() {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(TOKEN_KEY);
   }
 
-  // src/lib/shared/api/fetch-client.ts
+  // conversation-lit/lib/shared/api/fetch-client.ts
   var DEFAULT_TIMEOUT = 3e4;
   var HttpError = class extends Error {
     constructor(status, body, message) {
@@ -704,7 +704,7 @@
     }
   }
 
-  // src/lib/shared/ws/ws-push.ts
+  // conversation-lit/lib/shared/ws/ws-push.ts
   var SharedWSPush = class {
     constructor() {
       this.bridge = null;
@@ -744,7 +744,7 @@
   };
   var sharedWSPush = new SharedWSPush();
 
-  // src/lib/shared/conversation-api.ts
+  // conversation-lit/lib/shared/conversation-api.ts
   var TODAY_MS = 24 * 60 * 60 * 1e3;
   function getTodayStart() {
     const d3 = /* @__PURE__ */ new Date();
@@ -811,6 +811,13 @@
       const path = `/api/conversations/${encodeURIComponent(accountId)}/${encodeURIComponent(chatId)}/item`;
       return fetchApi(path);
     },
+    /** 仅从本地库存快照补全商品展示字段（不请求闲鱼列表/详情） */
+    async getItemsFromSnapshotBatch(accountId, itemIds) {
+      return fetchApi("/api/conversations/items/snapshot-batch", {
+        method: "POST",
+        body: { accountId, itemIds }
+      });
+    },
     /** 获取账号商品列表 */
     async getAccountGoods(accountId, page = 1, pageSize = 10, forceRefresh = false) {
       const path = `/api/goods/account/${encodeURIComponent(accountId)}`;
@@ -846,7 +853,63 @@
     }
   };
 
-  // src/lib/conversation-ui/conversation-lit.ts
+  // conversation-lit/lib/shared/conversation-quick-reply-api.ts
+  async function fetchQuickReplyFolders() {
+    return fetchApi(
+      "/api/conversation-quick-replies/folders"
+    );
+  }
+  async function createQuickReplyFolderApi(name) {
+    return fetchApi("/api/conversation-quick-replies/folders", {
+      method: "POST",
+      body: { name }
+    });
+  }
+  async function updateQuickReplyFolderApi(id, body) {
+    return fetchApi(`/api/conversation-quick-replies/folders/${id}`, {
+      method: "PUT",
+      body
+    });
+  }
+  async function deleteQuickReplyFolderApi(id, mode) {
+    return fetchApi(
+      `/api/conversation-quick-replies/folders/${id}`,
+      { method: "DELETE", params: { mode } }
+    );
+  }
+  async function fetchQuickReplyListPage(page, pageSize, search, folderId) {
+    const params = {
+      page,
+      pageSize
+    };
+    const s4 = search?.trim();
+    if (s4) params.search = s4;
+    else if (folderId !== void 0) {
+      if (folderId === "uncategorized") params.folderId = "uncategorized";
+      else params.folderId = folderId;
+    }
+    return fetchApi("/api/conversation-quick-replies", { params });
+  }
+  async function fetchQuickReplyById(id) {
+    return fetchApi(`/api/conversation-quick-replies/${id}`);
+  }
+  async function createQuickReplyItemApi(body) {
+    return fetchApi("/api/conversation-quick-replies", {
+      method: "POST",
+      body
+    });
+  }
+  async function updateQuickReplyItemApi(id, body) {
+    return fetchApi(`/api/conversation-quick-replies/${id}`, {
+      method: "PUT",
+      body
+    });
+  }
+  async function deleteQuickReplyItemApi(id) {
+    return fetchApi(`/api/conversation-quick-replies/${id}`, { method: "DELETE" });
+  }
+
+  // conversation-lit/lib/conversation-ui/conversation-lit.ts
   var CONVERSATION_CSS_ID = "conversation-lit-injected-css";
   function injectConversationStyles() {
     if (document.getElementById(CONVERSATION_CSS_ID)) return;
@@ -867,6 +930,11 @@
 }
 .conversations-page-header { flex-shrink: 0; }
 .conversations-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.conversations-unified-shell {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    border: 1px solid oklch(var(--b3)); border-radius: 0.75rem;
+    overflow: hidden; background: oklch(var(--b1));
+}
 .conversations-three-columns {
     display: grid;
     grid-template-columns: repeat(var(--conversation-columns, 3), minmax(0, 1fr));
@@ -875,64 +943,199 @@
 @media (max-width: 1024px) { .conversations-three-columns { grid-template-columns: 1fr; } }
 .conversation-column {
     display: flex; flex-direction: column; min-width: 0; min-height: 0;
-    border: 1px solid oklch(var(--b3)); border-radius: 0.75rem;
-    overflow: hidden; background: oklch(var(--b1)); padding: 0.5rem;
+    border: none; border-radius: 0; overflow: hidden;
+    background: transparent; padding: 0;
+}
+.conversation-column.col-chat { border-left: 1px solid oklch(var(--b3)); }
+.conversation-column.col-quick { border-left: 1px solid oklch(var(--b3)); }
+@media (max-width: 1024px) {
+    .conversation-column.col-chat { border-left: none; border-top: 1px solid oklch(var(--b3)); }
+    .conversation-column.col-quick { border-left: none; border-top: 1px solid oklch(var(--b3)); }
+}
+.conversations-three-columns.conversations-layout-with-quick {
+    /* \u5DE6\u4FA7\u804A\u5929\u5217\u8868\u7F29\u5C0F 1/4\uFF1A\u539F 1fr -> 0.75fr\uFF0C\u5269\u4F59\u5BBD\u5EA6\u5206\u914D\u7ED9\u4E2D/\u53F3\u5217 */
+    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.125fr) minmax(0, 1.125fr);
+    gap: 0;
+}
+@media (max-width: 1280px) {
+    .conversations-three-columns.conversations-layout-with-quick {
+        /* \u8F83\u7A84\u684C\u9762\u5BBD\u5EA6\u4E0B\u4FDD\u6301\u540C\u6837\u6BD4\u4F8B */
+        grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.125fr) minmax(0, 1.125fr);
+    }
+}
+@media (max-width: 1024px) {
+    .conversations-three-columns.conversations-layout-with-quick { grid-template-columns: 1fr; }
 }
 .conversation-column .column-header {
     display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem;
     flex-shrink: 0; min-height: var(--conversation-row-height); height: var(--conversation-row-height);
     box-sizing: border-box; overflow: hidden;
 }
-.conversation-column .column-header.card.glass-card { margin: 0; margin-bottom: 0.5rem; }
+.conversation-column .column-header.conversation-toolbar {
+    margin: 0; border-bottom: 1px solid oklch(var(--b3));
+    background: transparent; box-shadow: none;
+}
 .conversation-column.col-chat .column-chat { padding: 0; }
 .conversation-column.col-chat .conversation-header-card {
-    margin: 0; margin-bottom: 0.5rem;
-    height: var(--conversation-row-height); min-height: var(--conversation-row-height);
-    box-sizing: border-box; flex-shrink: 0; overflow: hidden;
+    margin: 0;
+    /* \u9876\u680F\u542B\u300C\u6635\u79F0\u884C + \u54A8\u8BE2\u5B9D\u8D1D\u6807\u9898\u300D\u4E24\u884C\uFF0C\u56FA\u5B9A 3.5rem + overflow:hidden \u4F1A\u88C1\u6389\u7B2C\u4E8C\u884C\uFF0C\u70B9\u6D88\u606F\u6EDA\u52A8/\u805A\u7126\u540E\u770B\u8D77\u6765\u50CF\u6807\u9898\u6D88\u5931 */
+    min-height: var(--conversation-row-height);
+    height: auto;
+    box-sizing: border-box; flex-shrink: 0; overflow: visible;
 }
-.conversation-column.col-list .column-list .card.glass-card.conversation-list-card,
-.conversation-column.col-list .column-list .card.glass-card.conversation-list-history-folder {
+.conversation-messages-pane {
+    flex: 1; min-height: 0; overflow: hidden;
+    background: transparent; box-shadow: none; border: none; border-radius: 0;
+}
+.conversation-column.col-list .column-list .card.glass-card.conversation-list-card {
     border-radius: 0.5rem; box-shadow: 0 1px 3px oklch(0 0 / 0.08);
 }
-.conversation-column.col-detail .column-header { justify-content: center; }
-.conversation-column.col-detail .column-list .card.detail-goods-card {
-    border-radius: 0.5rem; box-shadow: 0 1px 3px oklch(0 0 / 0.08);
+.conversation-history-folder-bar {
+    margin-top: 0.375rem; padding: 0.5rem 0.75rem;
+    border-top: 1px solid oklch(var(--b3));
+    background: oklch(var(--b2)); border-radius: 0; box-shadow: none;
+    transition: background-color 0.15s ease;
 }
+.conversation-history-folder-bar:hover { background: oklch(var(--b3)); }
+.conversation-history-folder-bar * { transition: none !important; }
+.conversation-history-folder-bar .w-8.h-8.rounded-lg { background-color: oklch(var(--b3)) !important; }
+.conversation-history-folder-bar:hover .w-8.h-8.rounded-lg { background-color: oklch(var(--b3) / 0.95) !important; }
+.conversation-history-folder-bar .badge {
+    background-color: oklch(var(--b3)) !important; color: oklch(var(--bc)) !important;
+}
+.conversation-list-empty-panel { background: transparent; border: none; box-shadow: none; border-radius: 0; }
 .conversation-column .column-title { font-weight: 600; font-size: 0.875rem; flex-shrink: 0; }
 .conversation-column.col-list .column-header {
-    justify-content: space-between; flex-wrap: nowrap; flex-direction: row;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    flex-direction: row;
+    gap: 0.5rem;
 }
 .conversation-column.col-list .column-header-left {
-    text-align: left; justify-content: flex-start; min-width: 0;
-    flex-wrap: nowrap; display: flex; align-items: center;
+    text-align: left;
+    justify-content: flex-start;
+    min-width: 0;
+    flex: 1 1 0;
+    flex-wrap: nowrap;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
 }
-.conversation-column.col-list .column-header-badges .column-header-count-badge { min-width: 8rem; }
+/* \u7EDF\u8BA1\u5FBD\u6807\u8FC7\u957F\u65F6\u7701\u7565\uFF0C\u907F\u514D\u4E0E\u53F3\u4FA7\u5706\u5F62\u6309\u94AE\u53E0\u5728\u4E00\u8D77 */
+.conversation-column.col-list .column-header-badges .column-header-count-badge {
+    min-width: 0;
+    flex-shrink: 1;
+    max-width: 100%;
+    overflow: hidden;
+}
+.conversation-column.col-list .column-header-badges .column-header-count-badge > .truncate {
+    min-width: 0;
+}
+.conversation-column.col-list .column-header-badges .column-title {
+    flex-shrink: 0;
+}
 .conversation-column .column-actions {
     display: flex; align-items: center; gap: 0.25rem; margin-left: auto; flex-shrink: 0;
 }
-.conversation-column.col-detail .column-list { align-items: stretch; text-align: center; }
-.conversation-column.col-detail .column-list.column-list-detail {
-    display: flex; flex-direction: column; min-height: 0;
+.conversation-column.col-list .column-actions { gap: 0.5rem; }
+/* \u804A\u5929\u5217\u8868\u680F\u53F3\u4FA7\u56FE\u6807\u6309\u94AE\uFF1A\u5706\u5F62\u767D\u5E95 + \u7EC6\u7070\u8FB9\uFF08\u5BF9\u9F50\u539F\u7248\u73B0\u4EE3\u4E3B\u9898\uFF09 */
+.conversation-column.col-list .column-actions .conversation-header-icon-btn {
+    width: 2.25rem !important; height: 2.25rem !important; min-height: 2.25rem !important;
+    padding: 0 !important; border-radius: 9999px !important;
+    display: inline-flex !important; align-items: center !important; justify-content: center !important;
+    flex-shrink: 0 !important;
 }
-.conversation-column.col-detail .detail-goods-card-stretch {
-    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+[data-theme="light"] .conversation-column.col-list .column-actions .conversation-header-icon-btn,
+[data-theme="modern"] .conversation-column.col-list .column-actions .conversation-header-icon-btn {
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    color: #171717 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
-.conversation-column.col-detail .column-list .card { text-align: center; }
-.conversation-column.col-detail .column-list .card .flex { justify-content: center; }
-.conversation-goods-list-toggle { user-select: none; }
-.conversation-column.col-goods-list .column-header.column-header-goods {
-    display: flex; align-items: center; justify-content: center;
+[data-theme="modern"] .conversation-column.col-list .column-actions .conversation-header-icon-btn {
+    border-color: rgba(180, 165, 150, 0.38) !important;
 }
-.conversation-column.col-goods-list .column-list-goods { padding: 0; }
-.conversation-column.col-goods-list .goods-list-row { box-shadow: 0 1px 2px oklch(0 0 / 0.06); }
-.conversation-column.col-goods-list .goods-list-send-btn { flex-shrink: 0; }
-.conversation-column.col-goods-list { min-width: 12rem; }
-.detail-goods-card .detail-goods-img {
-    width: 16rem; height: 16rem; min-width: 16rem; min-height: 16rem;
+[data-theme="light"] .conversation-column.col-list .column-actions .conversation-header-icon-btn:hover:not(:disabled),
+[data-theme="modern"] .conversation-column.col-list .column-actions .conversation-header-icon-btn:hover:not(:disabled) {
+    background: #f5f5f5 !important;
+    border-color: rgba(0, 0, 0, 0.12) !important;
 }
-.detail-goods-card .detail-goods-text { word-break: break-word; overflow-wrap: break-word; }
-.conversation-column.col-detail .detail-goods-card { min-height: 18rem; }
-.conversation-column .column-list { flex: 1; overflow-y: auto; padding: 0; min-height: 0; }
+[data-theme="dark"] .conversation-column.col-list .column-actions .conversation-header-icon-btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .conversation-column.col-list .column-actions .conversation-header-icon-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+/* \u5FEB\u6377\u56DE\u590D\u533A\uFF1A\u56FE\u6807\u6309\u94AE\u4E0E\u804A\u5929\u5217\u8868\u9876\u680F\u540C\u6B3E\uFF08\u5706\u5F62\u767D\u5E95 + \u7EC6\u8FB9\uFF09 */
+.conversation-column.col-quick .conversation-header-icon-btn {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    min-height: 2.25rem !important;
+    padding: 0 !important;
+    border-radius: 9999px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+}
+[data-theme="light"] .conversation-column.col-quick .conversation-header-icon-btn,
+[data-theme="modern"] .conversation-column.col-quick .conversation-header-icon-btn {
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    color: #171717 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+[data-theme="modern"] .conversation-column.col-quick .conversation-header-icon-btn {
+    border-color: rgba(180, 165, 150, 0.38) !important;
+}
+[data-theme="light"] .conversation-column.col-quick .conversation-header-icon-btn:hover:not(:disabled),
+[data-theme="modern"] .conversation-column.col-quick .conversation-header-icon-btn:hover:not(:disabled) {
+    background: #f5f5f5 !important;
+    border-color: rgba(0, 0, 0, 0.12) !important;
+}
+[data-theme="dark"] .conversation-column.col-quick .conversation-header-icon-btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .conversation-column.col-quick .conversation-header-icon-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+.conversation-column.col-quick .conversation-header-icon-btn.selection-trash-btn {
+    background: oklch(var(--b2)) !important;
+    color: #b91c1c !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="modern"] .conversation-column.col-quick .conversation-header-icon-btn.selection-trash-btn {
+    background: #ebe8e4 !important;
+    border-color: rgba(180, 165, 150, 0.35) !important;
+    color: #b91c1c !important;
+}
+[data-theme="dark"] .conversation-column.col-quick .conversation-header-icon-btn.selection-trash-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+}
+.conversation-column.col-quick .conversation-header-icon-btn.selection-trash-btn:hover:not(:disabled) {
+    filter: brightness(0.97);
+}
+.conversation-column.col-quick .conversation-header-icon-btn.conv-quick-pencil-active {
+    border-color: #ee862b !important;
+    background: #fff7ed !important;
+    color: #9a3412 !important;
+}
+[data-theme="dark"] .conversation-column.col-quick .conversation-header-icon-btn.conv-quick-pencil-active {
+    background: rgba(234, 88, 12, 0.15) !important;
+    border-color: rgba(251, 146, 60, 0.45) !important;
+    color: #fdba74 !important;
+}
+.conversation-header-card .consulting-product-title {
+    word-break: break-word; line-clamp: 2; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.conversation-column .column-list { flex: 1; overflow-y: auto; padding: 0 0.75rem 0.75rem; min-height: 0; }
 .conversation-column .column-chat {
     padding: 0; padding-top: 0; min-height: 0; overflow: visible;
 }
@@ -947,22 +1150,6 @@
 .conversations-page .conversation-column .card.glass-card.conversation-list-card { transition: none !important; }
 .conversations-page .conversation-column .card.glass-card.conversation-list-card:hover {
     transform: none !important; box-shadow: inherit !important;
-}
-.conversations-page .conversation-column.col-list .card.glass-card.conversation-list-history-folder {
-    background: oklch(var(--b2)) !important; transition: background-color 0.15s ease, box-shadow 0.15s ease !important;
-}
-.conversations-page .conversation-column.col-list .card.glass-card.conversation-list-history-folder:hover {
-    background: oklch(var(--b3)) !important; box-shadow: inherit !important; transform: none !important;
-}
-.conversations-page .conversation-column.col-list .card.glass-card.conversation-list-history-folder * { transition: none !important; }
-.conversations-page .conversation-column.col-list .card.glass-card.conversation-list-history-folder .w-8.h-8.rounded-lg {
-    background-color: oklch(var(--b3)) !important;
-}
-.conversations-page .conversation-column.col-list .card.glass-card.conversation-list-history-folder:hover .w-8.h-8.rounded-lg {
-    background-color: oklch(var(--b3) / 0.95) !important;
-}
-.conversations-page .conversation-column.col-list .card.glass-card.conversation-list-history-folder .badge {
-    background-color: oklch(var(--b3)) !important; color: oklch(var(--bc)) !important;
 }
 .conversations-page .conversation-column.col-list .card.glass-card.conversation-list-card.conversation-item-selected {
     background: oklch(var(--b2) / 0.98) !important;
@@ -989,9 +1176,11 @@
 .conversation-list-goods-price { font-weight: 600; color: oklch(var(--p)); }
 .conversation-list-msg-text { color: oklch(var(--bc) / 0.85); }
 .conversation-list-goods {
-    border: 1px solid oklch(var(--b3)); border-radius: 0.375rem;
-    background: oklch(var(--b2) / 0.9); line-height: 1.25;
-    box-shadow: 0 0 0 1px oklch(var(--b3) / 0.5);
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    line-height: 1.25;
+    box-shadow: none;
 }
 .conversation-list-goods-placeholder {
     min-height: 2rem; border: none; background: transparent; box-shadow: none;
@@ -999,22 +1188,26 @@
 .conversation-list-goods-placeholder::before { content: '\\00a0'; display: block; height: 0; overflow: hidden; }
 [data-theme="dark"] .conversation-list-goods-placeholder { background: transparent; }
 .conversation-list-lastmsg {
-    border: 1px solid oklch(var(--b3)); border-left: 3px solid oklch(var(--bc) / 0.25);
-    border-radius: 0.375rem; background: oklch(var(--b2) / 0.85); line-height: 1.25;
-    box-shadow: 0 0 0 1px oklch(var(--b3) / 0.5);
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    line-height: 1.25;
+    box-shadow: none;
 }
-[data-theme="dark"] .conversation-list-goods { background: oklch(var(--b2) / 0.7); border-color: oklch(var(--b3)); }
+[data-theme="dark"] .conversation-list-goods { background: transparent; border-color: transparent; }
 [data-theme="dark"] .conversation-list-lastmsg {
-    background: oklch(var(--b2) / 0.6); border-color: oklch(var(--b3));
-    border-left-color: oklch(var(--bc) / 0.35);
+    background: transparent;
+    border: none;
+    border-left: none;
 }
-.conversation-list-card .card-body.conversation-list-card-body { min-height: var(--conversation-row-height); }
+.conversation-list-card .card-body.conversation-list-card-body { min-height: 4rem; }
 .conversation-list-card .card-body { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-.conversation-list-card > .card-body > .flex { min-height: 3.75rem; }
+.conversation-list-card > .card-body > .flex { min-height: 4rem; }
 .conversation-list-card .flex-1 { line-height: 1.25; }
 .conversation-header-card {
-    display: flex; align-items: center; box-sizing: border-box;
-    height: var(--conversation-row-height); min-height: var(--conversation-row-height);
+    display: flex; align-items: flex-start; box-sizing: border-box;
+    min-height: var(--conversation-row-height);
+    height: auto;
 }
 .skeleton-line { display: block; width: 100%; border-radius: 9999px; background: rgba(148,163,184,0.25); }
 .skeleton-line-sm { height: 0.6rem; }
@@ -1053,7 +1246,7 @@
 [data-theme="dark"] .message-card-divider { border-top-color: rgba(0,0,0,0.12); }
 .message-card-subtitle { font-size: 0.8125rem; font-weight: 400; color: #555; margin: 0; line-height: 1.4; }
 [data-theme="dark"] .message-card-subtitle { color: #555; }
-.goods-card-in-message { max-width: 140px; }
+.goods-card-in-message { max-width: 210px; }
 [data-theme="dark"] .goods-card-in-message .bg-base-200\\/50 { background: rgba(255, 255, 255, 0.05); }
 [data-theme="light"] .goods-card-in-message .bg-base-200\\/50,
 [data-theme="modern"] .goods-card-in-message .bg-base-200\\/50 { background: rgba(0, 0, 0, 0.03); }
@@ -1086,21 +1279,77 @@
 .reply-area .textarea { border-radius: 0.75rem; }
 .reply-action-btns { align-items: stretch; min-width: 5.5rem; width: 5.5rem; }
 .reply-action-btns .reply-upload-img-btn,
-.reply-action-btns .reply-send-btn { display: block; width: 100%; }
+.reply-action-btns .reply-send-btn,
+.reply-action-btns .reply-upload-img-btn.btn,
+.reply-action-btns .reply-send-btn.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+}
+.reply-upload-img-btn,
+.reply-send-btn,
+.reply-upload-img-btn.btn,
+.reply-send-btn.btn {
+    min-height: 2rem;
+    height: 2rem;
+    padding: 0 0.625rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    gap: 0.375rem;
+    cursor: pointer;
+}
 .reply-upload-img-btn .btn,
 .reply-upload-img-btn button,
 .reply-send-btn .btn,
 .reply-send-btn button { width: 100% !important; min-width: 0 !important; justify-content: center; }
-button.reply-send-btn, .reply-send-btn button, .reply-send-btn .btn,
-button.goods-list-send-btn, .goods-list-send-btn button, .goods-list-send-btn .btn {
+[data-theme="light"] .reply-upload-img-btn,
+[data-theme="light"] .reply-upload-img-btn.btn,
+[data-theme="modern"] .reply-upload-img-btn,
+[data-theme="modern"] .reply-upload-img-btn.btn {
+    background: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #374151 !important;
+}
+[data-theme="light"] .reply-upload-img-btn:hover:not(:disabled),
+[data-theme="light"] .reply-upload-img-btn.btn:hover:not(:disabled),
+[data-theme="modern"] .reply-upload-img-btn:hover:not(:disabled),
+[data-theme="modern"] .reply-upload-img-btn.btn:hover:not(:disabled) {
+    background: #f3f4f6 !important;
+    border-color: rgba(0, 0, 0, 0.12) !important;
+}
+[data-theme="dark"] .reply-upload-img-btn,
+[data-theme="dark"] .reply-upload-img-btn.btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .reply-upload-img-btn:hover:not(:disabled),
+[data-theme="dark"] .reply-upload-img-btn.btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+.reply-action-btns .reply-upload-img-btn svg,
+.reply-action-btns .reply-send-btn svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+button.reply-send-btn, .reply-send-btn button, .reply-send-btn .btn {
     background: #f97316 !important; border-color: #f97316 !important;
     background-image: none !important; color: #fff !important; box-shadow: none !important;
 }
-button.reply-send-btn:hover:not(:disabled), .reply-send-btn button:hover:not(:disabled), .reply-send-btn .btn:hover:not(:disabled),
-button.goods-list-send-btn:hover:not(:disabled), .goods-list-send-btn button:hover:not(:disabled), .goods-list-send-btn .btn:hover:not(:disabled) {
+button.reply-send-btn:hover:not(:disabled), .reply-send-btn button:hover:not(:disabled), .reply-send-btn .btn:hover:not(:disabled) {
     background: #ea580c !important; border-color: #ea580c !important; color: #fff !important;
 }
-.reply-area { position: static; }
+.reply-area {
+    position: static;
+    margin-top: 0;
+    border-top: 1px solid oklch(var(--b3));
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
 .reply-pending-img img { display: block; }
 .image-preview-overlay {
     position: fixed; inset: 0; z-index: 9999;
@@ -1142,11 +1391,402 @@ button.goods-list-send-btn:hover:not(:disabled), .goods-list-send-btn button:hov
 .image-preview-toolbtn:hover { background: oklch(var(--b2)); transform: scale(1.04); }
 .reply-image { border: 1px solid rgba(0,0,0,0.06); }
 [data-theme="dark"] .reply-image { border-color: rgba(255,255,255,0.12); }
-.delete-older-than-row {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem;
-    flex-shrink: 0; margin-bottom: 0.25rem;
+.column-header-extra.delete-older-than-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    box-sizing: border-box;
+    border-bottom: 1px solid oklch(var(--b3));
+    background: transparent;
 }
-.delete-older-than-label { font-size: 0.75rem; white-space: nowrap; }
+.conversation-column.col-list .column-header-extra.delete-older-than-row {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+}
+.delete-older-than-label {
+    font-size: 0.875rem;
+    line-height: 1.25;
+    font-weight: 500;
+    color: oklch(var(--bc));
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+}
+.delete-older-than-days-input {
+    width: 3.5rem;
+    min-width: 3.5rem;
+    height: 2.25rem;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 0.375rem;
+    text-align: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    border-radius: 0.5rem;
+    border: 1px solid oklch(var(--b3));
+    background: oklch(var(--b1));
+    color: oklch(var(--bc));
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.delete-older-than-days-input::-webkit-outer-spin-button,
+.delete-older-than-days-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.delete-older-than-days-input:focus {
+    outline: none;
+    border-color: #ee862b;
+    box-shadow: 0 0 0 2px rgba(238, 134, 43, 0.22);
+}
+[data-theme="modern"] .delete-older-than-days-input {
+    background: #ffffff;
+    border-color: rgba(180, 165, 150, 0.42);
+}
+[data-theme="light"] .delete-older-than-days-input {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.12);
+}
+[data-theme="dark"] .delete-older-than-days-input {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: oklch(var(--bc));
+}
+.conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk {
+    margin-left: 0.125rem;
+    min-height: 2.25rem;
+    height: 2.25rem;
+    padding: 0 1.125rem;
+    border-radius: 9999px;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    border: 1px solid #d97520;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+[data-theme="light"] .conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk,
+[data-theme="modern"] .conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk {
+    background: #ee862b !important;
+    color: #1a1a1a !important;
+    box-shadow: 0 1px 2px rgba(180, 100, 40, 0.15);
+}
+[data-theme="light"] .conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk:hover:not(:disabled),
+[data-theme="modern"] .conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk:hover:not(:disabled) {
+    background: #e07820 !important;
+    border-color: #c4681a;
+    box-shadow: 0 2px 6px rgba(180, 100, 40, 0.2);
+}
+[data-theme="dark"] .conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk {
+    background: #ea580c !important;
+    color: #fff !important;
+    border-color: #c2410c;
+    box-shadow: none;
+}
+[data-theme="dark"] .conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk:hover:not(:disabled) {
+    background: #f97316 !important;
+    border-color: #ea580c;
+}
+.conversation-column.col-list .delete-older-than-row .btn-delete-older-bulk:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+.conversation-column.col-list .column-actions .conversation-header-icon-btn.selection-trash-btn {
+    background: oklch(var(--b2)) !important;
+    color: #b91c1c !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="modern"] .conversation-column.col-list .column-actions .conversation-header-icon-btn.selection-trash-btn {
+    background: #ebe8e4 !important;
+    border-color: rgba(180, 165, 150, 0.35) !important;
+    color: #b91c1c !important;
+}
+[data-theme="dark"] .conversation-column.col-list .column-actions .conversation-header-icon-btn.selection-trash-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+}
+.conversation-column.col-list .column-actions .conversation-header-icon-btn.selection-trash-btn:hover:not(:disabled) {
+    filter: brightness(0.97);
+}
+/* \u5FEB\u6377\u56DE\u590D\uFF08\u5BF9\u8BDD\u9875\u72EC\u7ACB\u5E93\uFF09 */
+.conversation-column.col-quick {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+.conv-quick-root {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+.conv-quick-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    flex-shrink: 0;
+    border-bottom: 1px solid oklch(var(--b3));
+    background: transparent;
+}
+.conv-quick-toolbar-title {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: oklch(var(--bc));
+    line-height: 1.3;
+}
+.conv-quick-toolbar-hint {
+    font-size: 0.625rem;
+    font-weight: 400;
+    color: oklch(var(--bc) / 0.55);
+    margin-top: 0.125rem;
+}
+.conv-quick-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+.conv-quick-folder-panel {
+    width: 8.25rem;
+    min-width: 8.25rem;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid oklch(var(--b3) / 0.85);
+    background: oklch(var(--b2) / 0.35);
+}
+.conv-quick-folder-head-row {
+    flex-shrink: 0;
+    padding: 0.25rem 0.35rem 0.125rem;
+    align-items: center;
+}
+.conv-quick-folder-head {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: oklch(var(--bc) / 0.5);
+}
+.conv-quick-folder-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.conv-quick-folder-row-actions {
+    display: flex;
+    gap: 0.125rem;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.conv-quick-composer {
+    flex-shrink: 0;
+    border-top: 1px solid oklch(var(--b3));
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    background: oklch(var(--b2) / 0.25);
+}
+.conv-quick-composer input,
+.conv-quick-composer textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.45rem;
+    border-radius: 0.375rem;
+    border: 1px solid oklch(var(--b3));
+    background: oklch(var(--b1));
+    color: oklch(var(--bc));
+}
+.conv-quick-composer textarea {
+    min-height: 3.25rem;
+    resize: vertical;
+    max-height: 8rem;
+}
+.conv-quick-composer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    align-items: center;
+}
+.conv-quick-composer-actions .conv-quick-composer-cancel-btn {
+    min-height: 2rem;
+    height: 2rem;
+    padding: 0 0.75rem;
+    font-size: 0.8125rem;
+    border-radius: 0.5rem;
+    border: 1px solid oklch(var(--b3));
+    background: oklch(var(--b1));
+    color: oklch(var(--bc));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .conv-quick-composer-actions .conv-quick-composer-cancel-btn,
+[data-theme="modern"] .conv-quick-composer-actions .conv-quick-composer-cancel-btn {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.1);
+}
+.conv-quick-composer-actions .conv-quick-composer-cancel-btn:hover:not(:disabled) {
+    background: oklch(var(--b2));
+}
+[data-theme="dark"] .conv-quick-composer-actions .conv-quick-composer-cancel-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+}
+.conv-quick-composer-actions .reply-send-btn {
+    min-height: 2rem !important;
+    height: 2rem !important;
+    padding: 0 0.75rem !important;
+    font-size: 0.8125rem !important;
+    border-radius: 0.5rem !important;
+}
+.conv-quick-item-row-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    justify-content: flex-end;
+    align-items: center;
+}
+.conv-quick-folder-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 0.25rem 0.375rem;
+}
+.conv-quick-folder-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    width: 100%;
+    padding: 0.35rem 0.4rem;
+    margin-bottom: 0.125rem;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    background: transparent;
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    color: oklch(var(--bc));
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+.conv-quick-folder-btn:hover {
+    background: oklch(var(--b3) / 0.35);
+}
+.conv-quick-folder-btn.conv-quick-folder-active {
+    background: oklch(var(--b2));
+    border-color: #ee862b;
+    color: oklch(var(--bc));
+    font-weight: 600;
+}
+.conv-quick-folder-btn .conv-quick-folder-ico {
+    flex-shrink: 0;
+    opacity: 0.75;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.conv-quick-folder-btn .conv-quick-folder-ico svg {
+    width: 100%;
+    height: 100%;
+    display: block; /* \u89E3\u51B3 SVG \u57FA\u7EBF\u5BFC\u81F4\u7684\u5782\u76F4\u504F\u79FB */
+}
+.conv-quick-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.conv-quick-search {
+    padding: 0.375rem 0.5rem;
+    flex-shrink: 0;
+    border-bottom: 1px solid oklch(var(--b3) / 0.6);
+}
+.conv-quick-search input {
+    width: 100%;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.375rem;
+    border: 1px solid oklch(var(--b3));
+    background: oklch(var(--b1));
+    color: oklch(var(--bc));
+    box-sizing: border-box;
+}
+.conv-quick-search input:focus {
+    outline: none;
+    border-color: #ee862b;
+    box-shadow: 0 0 0 2px rgba(238, 134, 43, 0.2);
+}
+.conv-quick-items {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.375rem 0.5rem 0.5rem;
+}
+.conv-quick-item-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.45rem 0.5rem;
+    margin-bottom: 0.375rem;
+    border-radius: 0.375rem;
+    border: 1px solid oklch(var(--b3) / 0.7);
+    background: oklch(var(--b1));
+}
+.conv-quick-item-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: oklch(var(--bc));
+    line-height: 1.25;
+    word-break: break-word;
+}
+.conv-quick-item-preview {
+    font-size: 0.6875rem;
+    color: oklch(var(--bc) / 0.65);
+    line-height: 1.35;
+    max-height: 3.2rem;
+    overflow: hidden;
+    word-break: break-word;
+}
+/* \u4E0E\u5E95\u90E8\u56DE\u590D\u533A\u300C\u53D1\u9001\u300D\u540C\u6B3E\u4E3B\u6309\u94AE */
+.conv-quick-item-row-btns .reply-send-btn.conv-quick-send-btn {
+    min-height: 2rem !important;
+    height: 2rem !important;
+    padding: 0 0.625rem !important;
+    font-size: 0.8125rem !important;
+    border-radius: 0.5rem !important;
+    gap: 0.25rem;
+}
+.conv-quick-empty {
+    font-size: 0.75rem;
+    color: oklch(var(--bc) / 0.5);
+    text-align: center;
+    padding: 1.25rem 0.5rem;
+    line-height: 1.4;
+}
+[data-theme="dark"] .conv-quick-folder-panel {
+    background: oklch(var(--b2) / 0.45);
+}
 `;
   var svgIcon = (d3, size = 16) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d3}</svg>`;
   var ICONS = {
@@ -1156,11 +1796,12 @@ button.goods-list-send-btn:hover:not(:disabled), .goods-list-send-btn button:hov
     CheckCircle: svgIcon('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>'),
     Bell: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path>'),
     CheckSquare: svgIcon('<polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>'),
+    Plus: svgIcon('<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>'),
+    Pencil: svgIcon('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>'),
     MessageCircle: svgIcon('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>'),
     Folder: svgIcon('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>'),
     ChevronDown: svgIcon('<polyline points="6 9 12 15 18 9"></polyline>'),
     ChevronUp: svgIcon('<polyline points="18 15 12 9 6 15"></polyline>'),
-    Package: svgIcon('<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>'),
     Send: svgIcon('<line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>'),
     Image: svgIcon('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline>')
   };
@@ -1191,7 +1832,6 @@ ${m2}` : m2);
 ${m2}` : m2))
     };
   }
-  var STORAGE_SHOW_GOODS = "conversation_show_goods_list_column";
   var TRANSACTION_CARD_PHRASES = /* @__PURE__ */ new Set([
     "[\u6211\u5DF2\u62CD\u4E0B\uFF0C\u5F85\u4ED8\u6B3E]",
     "[\u6211\u5DF2\u4ED8\u6B3E\uFF0C\u7B49\u5F85\u4F60\u53D1\u8D27]",
@@ -1210,10 +1850,23 @@ ${m2}` : m2))
     "\u672A\u77E5",
     "AI\u5236\u9020\u8005"
   ]);
+  function looksLikeOrderOrTransactionDisplayNameUi(name) {
+    const t4 = (name || "").trim();
+    if (!t4) return false;
+    const flat = t4.replace(/^\[+|\]+$/g, "");
+    for (const p3 of TRANSACTION_CARD_PHRASES) {
+      const inner = p3.replace(/^\[|\]$/g, "");
+      if (t4.includes(p3) || flat.includes(inner) || t4.includes(inner)) return true;
+    }
+    return /买家已拍下|我已拍下|待付款|待发货|已发货|确认收货|交易成功|退款|关闭订单|等待你发货|等待买家|我已付款|待刀成|小刀|拼单|记得及时|我来评价|已完成评价/.test(
+      t4
+    );
+  }
   function isInvalidDisplayName(name) {
     if (!name || !name.trim()) return true;
     const t4 = name.trim();
-    return t4 === "\u672A\u77E5\u7528\u6237" || t4 === "\u672A\u77E5" || SYSTEM_DISPLAY_NAMES.has(t4);
+    if (t4 === "\u672A\u77E5\u7528\u6237" || t4 === "\u672A\u77E5" || SYSTEM_DISPLAY_NAMES.has(t4)) return true;
+    return looksLikeOrderOrTransactionDisplayNameUi(t4);
   }
   function getMsgTimestamp(msg) {
     const ts = msg.timestamp;
@@ -1248,13 +1901,7 @@ ${m2}` : m2))
       this._deletingSelected = false;
       this._deleteOlderThanDays = 7;
       this._deletingOlderThan = false;
-      this._showGoodsListColumn = true;
       this._desktopNotificationEnabled = true;
-      this._accountGoodsList = [];
-      this._loadingGoodsList = false;
-      this._sendingProductLinkId = null;
-      this._hasMoreGoodsList = false;
-      this._loadingMoreGoodsList = false;
       this._replyText = "";
       this._pendingImages = [];
       this._sendingReply = false;
@@ -1262,13 +1909,23 @@ ${m2}` : m2))
       this._imagePreviewScale = 1;
       this._imagePreviewTranslate = { x: 0, y: 0 };
       this._messageItems = /* @__PURE__ */ new Map();
+      this._quickFolders = [];
+      this._quickFolderFilter = void 0;
+      this._quickHasUncat = false;
+      this._quickItems = [];
+      this._quickListLoading = false;
+      this._quickSearch = "";
+      this._quickSendingId = null;
+      this._quickFolderEditMode = false;
+      this._quickDraftName = "";
+      this._quickDraftContent = "";
+      this._quickEditItemId = null;
+      this._quickSavingDraft = false;
+      this._quickSearchDebounce = null;
       this._limit = _ConversationLitElement.MAX_CONVERSATIONS_CACHED;
       this._offset = 0;
       this._historyOffset = 0;
       this._todayTotal = 0;
-      this._goodsListAccountId = null;
-      this._goodsListPage = 1;
-      this._goodsListCacheByAccount = /* @__PURE__ */ new Map();
       this._displayNameOverrides = /* @__PURE__ */ new Map();
       this._timeFormatCache = /* @__PURE__ */ new Map();
       this._messageItemCache = /* @__PURE__ */ new Map();
@@ -1288,7 +1945,6 @@ ${m2}` : m2))
       this._imagePreviewPendingTranslate = null;
       this._escHandler = null;
       this.skeletonListCount = [1, 2, 3, 4, 5, 6];
-      this.GOODS_LIST_PAGE_SIZE = 10;
     }
     createRenderRoot() {
       return this;
@@ -1297,11 +1953,6 @@ ${m2}` : m2))
     connectedCallback() {
       super.connectedCallback();
       injectConversationStyles();
-      try {
-        const stored = localStorage.getItem(STORAGE_SHOW_GOODS);
-        if (stored !== null) this._showGoodsListColumn = stored !== "false";
-      } catch {
-      }
       try {
         this._desktopNotificationEnabled = typeof Notification !== "undefined" && Notification.permission === "granted" && localStorage.getItem("desktop_notification_enabled") !== "false";
       } catch {
@@ -1316,6 +1967,7 @@ ${m2}` : m2))
           this.loadConversations();
         }
         this._setupWs();
+        void this._loadQuickReplyPanel();
       }, 0);
     }
     _setupWs() {
@@ -1337,6 +1989,10 @@ ${m2}` : m2))
       this._pendingPreviewUrls.forEach((u3) => URL.revokeObjectURL(u3));
       this._optimisticObjectUrls.forEach((u3) => URL.revokeObjectURL(u3));
       this._timeFormatCache.clear();
+      if (this._quickSearchDebounce) {
+        clearTimeout(this._quickSearchDebounce);
+        this._quickSearchDebounce = null;
+      }
       if (this._imagePreviewWheelRafId !== null) cancelAnimationFrame(this._imagePreviewWheelRafId);
       if (this._imagePreviewPointerRafId !== null) cancelAnimationFrame(this._imagePreviewPointerRafId);
     }
@@ -1511,9 +2167,6 @@ ${m2}` : m2))
           if (itemIds.size > 0) this._loadMessageItemsAsync(conv.accountId, Array.from(itemIds)).catch(() => {
           });
         }
-        if (this._showGoodsListColumn && this._goodsListAccountId !== conv.accountId) {
-          this._loadAccountGoodsList(conv.accountId);
-        }
       } catch (e7) {
         console.error("\u52A0\u8F7D\u5BF9\u8BDD\u8BE6\u60C5\u5931\u8D25", e7);
       } finally {
@@ -1522,8 +2175,28 @@ ${m2}` : m2))
       }
     }
     /**
-     * 异步加载「正在咨询的宝贝」，不阻塞消息首屏。
-     * 多级 fallback：API → 商品列表 → MTOP 详情 → 订单列表
+     * 当前对话进入输入框（点击/聚焦）时，把该对话置为已读。
+     * 用于修复：若 WS 在用户未切换对话的情况下更新了 unread，
+     * openConversation 不会再次触发，但用户已实际“在看该对话”。
+     */
+    _markSelectedConversationAsReadIfNeeded() {
+      if (this._selectionMode) return;
+      const sel = this._selectedConversation;
+      if (!sel?.accountId || !sel?.chatId) return;
+      const key = `${sel.accountId}:${sel.chatId}`;
+      const inList = [...this._todayConversations, ...this._historyConversations].find(
+        (c4) => `${c4.accountId}:${c4.chatId}` === key
+      );
+      const unread = inList?.unread ?? sel.unread ?? 0;
+      if (!unread || unread <= 0) return;
+      this._selectedConversation = { ...sel, unread: 0 };
+      this._todayConversations = this._todayConversations.map((c4) => c4.accountId === sel.accountId && c4.chatId === sel.chatId ? { ...c4, unread: 0 } : c4);
+      this._historyConversations = this._historyConversations.map((c4) => c4.accountId === sel.accountId && c4.chatId === sel.chatId ? { ...c4, unread: 0 } : c4);
+      conversationApi.markAsRead(sel.accountId, sel.chatId).catch(() => {
+      });
+    }
+    /**
+     * 异步加载「正在咨询的宝贝」，不阻塞消息首屏。仅使用对话 /item 接口（订单 + 消息字段 + 本地快照），不拉闲鱼。
      */
     async _loadConversationItemAsync(conv) {
       if (!conv.accountId || !conv.chatId) return;
@@ -1531,48 +2204,16 @@ ${m2}` : m2))
       if (!current || current.accountId !== conv.accountId || current.chatId !== conv.chatId) return;
       try {
         const itemRes = await conversationApi.getConversationItem(conv.accountId, conv.chatId);
-        let item = itemRes?.item ?? null;
-        if (item && item.id && (!item.title || !item.picUrl)) {
-          try {
-            const goodsRes = await conversationApi.getAccountGoods(conv.accountId, 1);
-            const found = goodsRes?.items?.find((g2) => g2.id === item.id);
-            if (found) {
-              item = { id: found.id, title: found.title, picUrl: found.picUrl || null, price: found.price };
-            }
-          } catch {
-          }
-        }
-        if (item && item.id && (!item.title || !item.picUrl)) {
-          try {
-            const smartRes = await conversationApi.getItemDetailSmart(conv.accountId, item.id);
-            if (smartRes?.success && smartRes.item) {
-              item = {
-                id: item.id,
-                title: smartRes.item.title || item.title,
-                picUrl: smartRes.item.picUrl || item.picUrl,
-                price: smartRes.item.price || item.price
-              };
-            }
-          } catch {
-          }
-        }
-        if (item && item.id && (!item.title || !item.picUrl)) {
-          try {
-            const ordersRes = await conversationApi.getOrders(conv.accountId, void 0, 100, 0);
-            const order = ordersRes?.orders?.find((o6) => o6.itemId === item.id && o6.itemTitle && o6.itemPicUrl);
-            if (order) {
-              item = {
-                id: item.id,
-                title: order.itemTitle || item.title,
-                picUrl: order.itemPicUrl || item.picUrl,
-                price: order.itemPrice || item.price
-              };
-            }
-          } catch {
-          }
-        }
+        const item = itemRes?.item ?? null;
         if (this._selectedConversation?.accountId === conv.accountId && this._selectedConversation?.chatId === conv.chatId) {
           this._conversationItem = item;
+          this._selectedConversation = this._selectedConversation ? { ...this._selectedConversation, item } : this._selectedConversation;
+          this._todayConversations = this._todayConversations.map(
+            (c4) => c4.accountId === conv.accountId && c4.chatId === conv.chatId ? { ...c4, item } : c4
+          );
+          this._historyConversations = this._historyConversations.map(
+            (c4) => c4.accountId === conv.accountId && c4.chatId === conv.chatId ? { ...c4, item } : c4
+          );
         }
       } catch {
         this._conversationItem = null;
@@ -1788,6 +2429,253 @@ ${m2}` : m2))
         this._deletingOlderThan = false;
       }
     }
+    /* ── 快捷回复（独立存储，与发货内容库无关） ── */
+    _truncateQuickPreview(s4, max) {
+      if (s4 == null || s4 === "") return "";
+      const t4 = String(s4).replace(/\s+/g, " ").trim();
+      if (!t4) return "";
+      if (t4.length <= max) return t4;
+      return `${t4.slice(0, max)}\u2026`;
+    }
+    async _loadQuickReplyFolders() {
+      try {
+        const res = await fetchQuickReplyFolders();
+        const folders = [...res.folders || []].sort(
+          (a3, b3) => (a3.sortOrder ?? 0) - (b3.sortOrder ?? 0)
+        );
+        this._quickFolders = folders;
+        this._quickHasUncat = (res.uncategorizedCount ?? 0) > 0;
+      } catch (e7) {
+        console.error("\u52A0\u8F7D\u5FEB\u6377\u56DE\u590D\u6587\u4EF6\u5939\u5931\u8D25", e7);
+        this._quickFolders = [];
+        this._quickHasUncat = false;
+      }
+    }
+    async _loadQuickReplyItems() {
+      this._quickListLoading = true;
+      try {
+        const r6 = await fetchQuickReplyListPage(
+          1,
+          200,
+          this._quickSearch.trim() || void 0,
+          this._quickFolderFilter
+        );
+        this._quickItems = r6.list || [];
+      } catch (e7) {
+        console.error("\u52A0\u8F7D\u5FEB\u6377\u56DE\u590D\u5217\u8868\u5931\u8D25", e7);
+        this._quickItems = [];
+      } finally {
+        this._quickListLoading = false;
+      }
+    }
+    async _loadQuickReplyPanel() {
+      await this._loadQuickReplyFolders();
+      await this._loadQuickReplyItems();
+    }
+    _draftTargetFolderId() {
+      if (this._quickFolderFilter === void 0 || this._quickFolderFilter === "uncategorized") {
+        return null;
+      }
+      return this._quickFolderFilter;
+    }
+    _selectQuickFolder(id) {
+      this._quickFolderFilter = id;
+      void this._loadQuickReplyItems();
+    }
+    _onQuickSearchInput(e7) {
+      const v2 = e7.target.value;
+      this._quickSearch = v2;
+      if (this._quickSearchDebounce) clearTimeout(this._quickSearchDebounce);
+      this._quickSearchDebounce = setTimeout(() => {
+        this._quickSearchDebounce = null;
+        void this._loadQuickReplyItems();
+      }, 380);
+    }
+    _onQuickDraftNameInput(e7) {
+      this._quickDraftName = e7.target.value;
+    }
+    _onQuickDraftContentInput(e7) {
+      this._quickDraftContent = e7.target.value;
+    }
+    _startEditItem(item) {
+      this._quickEditItemId = item.id;
+      this._quickDraftName = item.name || "";
+      this._quickDraftContent = item.content || "";
+    }
+    _cancelQuickDraft() {
+      this._quickEditItemId = null;
+      this._quickDraftName = "";
+      this._quickDraftContent = "";
+    }
+    async _saveQuickDraft() {
+      const name = this._quickDraftName.trim();
+      const content = this._quickDraftContent.trim();
+      if (!name) {
+        await getDialog().alert("\u63D0\u793A", "\u8BF7\u586B\u5199\u6807\u9898");
+        return;
+      }
+      if (!content) {
+        await getDialog().alert("\u63D0\u793A", "\u8BF7\u586B\u5199\u8981\u53D1\u9001\u7684\u6587\u672C\u5185\u5BB9");
+        return;
+      }
+      if (this._quickSavingDraft) return;
+      this._quickSavingDraft = true;
+      try {
+        if (this._quickEditItemId != null) {
+          await updateQuickReplyItemApi(this._quickEditItemId, { name, content });
+        } else {
+          await createQuickReplyItemApi({
+            name,
+            content,
+            folderId: this._draftTargetFolderId()
+          });
+        }
+        this._cancelQuickDraft();
+        await this._loadQuickReplyPanel();
+      } catch (e7) {
+        console.error("\u4FDD\u5B58\u5FEB\u6377\u8BDD\u672F\u5931\u8D25", e7);
+        const msg = e7?.error?.error || e7?.error?.message || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
+        await getDialog().alert("\u4FDD\u5B58\u5931\u8D25", msg);
+      } finally {
+        this._quickSavingDraft = false;
+      }
+    }
+    async _addQuickFolder() {
+      if (typeof window === "undefined") return;
+      const n5 = window.prompt("\u65B0\u5EFA\u6587\u4EF6\u5939\u540D\u79F0", "");
+      if (!n5 || !String(n5).trim()) return;
+      try {
+        await createQuickReplyFolderApi(String(n5).trim());
+        await this._loadQuickReplyPanel();
+      } catch (e7) {
+        console.error("\u65B0\u5EFA\u6587\u4EF6\u5939\u5931\u8D25", e7);
+        const msg = e7?.error?.error || e7?.error?.message || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
+        await getDialog().alert("\u64CD\u4F5C\u5931\u8D25", msg);
+      }
+    }
+    async _renameQuickFolder(f3) {
+      if (typeof window === "undefined") return;
+      const n5 = window.prompt("\u6587\u4EF6\u5939\u540D\u79F0", f3.name);
+      if (!n5 || !String(n5).trim()) return;
+      try {
+        await updateQuickReplyFolderApi(f3.id, { name: String(n5).trim() });
+        await this._loadQuickReplyFolders();
+      } catch (e7) {
+        console.error("\u91CD\u547D\u540D\u6587\u4EF6\u5939\u5931\u8D25", e7);
+        const msg = e7?.error?.error || e7?.error?.message || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
+        await getDialog().alert("\u64CD\u4F5C\u5931\u8D25", msg);
+      }
+    }
+    async _deleteQuickFolder(f3) {
+      const dialog = getDialog();
+      if (!await dialog.confirm(
+        "\u5220\u9664\u6587\u4EF6\u5939",
+        `\u786E\u5B9A\u5220\u9664\u300C${f3.name}\u300D\uFF1F\u5176\u4E2D\u7684\u5FEB\u6377\u8BDD\u672F\u5C06\u79FB\u5230\u300C\u672A\u5206\u7EC4\u300D\u3002`
+      )) {
+        return;
+      }
+      try {
+        await deleteQuickReplyFolderApi(f3.id, "moveToUncategorized");
+        if (this._quickFolderFilter === f3.id) this._quickFolderFilter = void 0;
+        await this._loadQuickReplyPanel();
+      } catch (e7) {
+        console.error("\u5220\u9664\u6587\u4EF6\u5939\u5931\u8D25", e7);
+        const msg = e7?.error?.error || e7?.error?.message || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
+        await getDialog().alert("\u64CD\u4F5C\u5931\u8D25", msg);
+      }
+    }
+    async _deleteQuickItem(item) {
+      if (!await getDialog().confirm("\u5220\u9664\u8BDD\u672F", `\u786E\u5B9A\u5220\u9664\u300C${item.name}\u300D\uFF1F`)) return;
+      try {
+        await deleteQuickReplyItemApi(item.id);
+        if (this._quickEditItemId === item.id) this._cancelQuickDraft();
+        await this._loadQuickReplyPanel();
+      } catch (e7) {
+        console.error("\u5220\u9664\u8BDD\u672F\u5931\u8D25", e7);
+        const msg = e7?.error?.error || e7?.error?.message || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
+        await getDialog().alert("\u64CD\u4F5C\u5931\u8D25", msg);
+      }
+    }
+    _toggleQuickFolderEditMode() {
+      this._quickFolderEditMode = !this._quickFolderEditMode;
+    }
+    /** 仅发送一段文字，不改动输入框草稿与待发送图片 */
+    async _sendStandaloneTextMessage(text) {
+      const conv = this._selectedConversation;
+      if (!conv || this._sendingReply) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const { accountId, chatId, userId: toUserId } = conv;
+      const senderName = this._getCurrentAccountNickname(conv);
+      const now = Date.now();
+      const nowStr = new Date(now).toISOString();
+      const optimisticMessage = {
+        id: -1,
+        senderId: accountId,
+        senderName,
+        content: trimmed,
+        msgTime: nowStr,
+        timestamp: now,
+        direction: "out",
+        msgType: "text"
+      };
+      const currentMessages = conv.messages || [];
+      this._selectedConversation = { ...conv, messages: [...currentMessages, optimisticMessage] };
+      this._scrollToBottomAfterUpdate();
+      this._sendingReply = true;
+      try {
+        await conversationApi.sendMessage(accountId, chatId, toUserId, trimmed);
+        const detail = await conversationApi.getConversation(accountId, chatId, 50);
+        this._selectedConversation = { ...conv, ...detail, messages: detail.messages };
+        this._syncListDisplayNameFromDetail(
+          accountId,
+          chatId,
+          this.getConversationDisplayName(this._selectedConversation),
+          detail.userAvatar
+        );
+        this._scrollToBottomAfterUpdate();
+      } catch (e7) {
+        console.error("\u5FEB\u6377\u53D1\u9001\u5931\u8D25", e7);
+        this._selectedConversation = {
+          ...conv,
+          messages: (this._selectedConversation?.messages || []).filter((m2) => m2.id >= 0)
+        };
+        const msg = e7?.error?.error || e7?.error?.message || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
+        await getDialog().alert("\u53D1\u9001\u5931\u8D25", msg);
+      } finally {
+        this._sendingReply = false;
+        setTimeout(() => {
+          const el = this.querySelector(".reply-textarea");
+          el?.focus();
+        }, 0);
+      }
+    }
+    async _sendQuickItem(item) {
+      if (!this._selectedConversation) {
+        await getDialog().alert("\u63D0\u793A", "\u8BF7\u5148\u5728\u5DE6\u4FA7\u9009\u62E9\u4E00\u6761\u5BF9\u8BDD");
+        return;
+      }
+      if (this._sendingReply || this._quickSendingId != null) return;
+      this._quickSendingId = item.id;
+      try {
+        let text = (item.content ?? "").trim();
+        if (!text) {
+          const full = await fetchQuickReplyById(item.id);
+          text = (full.content ?? "").trim();
+        }
+        if (!text) {
+          await getDialog().alert("\u63D0\u793A", "\u8BE5\u6761\u6682\u65E0\u6587\u672C\u5185\u5BB9");
+          return;
+        }
+        await this._sendStandaloneTextMessage(text);
+      } catch (e7) {
+        console.error("\u5FEB\u6377\u56DE\u590D\u53D1\u9001\u5931\u8D25", e7);
+        const msg = e7?.error?.error || e7?.error?.message || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
+        await getDialog().alert("\u53D1\u9001\u5931\u8D25", msg);
+      } finally {
+        this._quickSendingId = null;
+      }
+    }
     /* ── 回复/发送 ── */
     _onReplyInput(e7) {
       this._replyText = e7.target.value;
@@ -1915,259 +2803,6 @@ ${m2}` : m2))
           el?.focus();
         }, 0);
       }
-    }
-    /* ── 商品列表 ── */
-    _toggleShowGoodsListColumn() {
-      this._showGoodsListColumn = !this._showGoodsListColumn;
-      try {
-        localStorage.setItem(STORAGE_SHOW_GOODS, String(this._showGoodsListColumn));
-      } catch {
-      }
-      if (this._showGoodsListColumn) {
-        const conv = this._selectedConversation;
-        if (conv?.accountId && this._goodsListAccountId !== conv.accountId) {
-          this._loadAccountGoodsList(conv.accountId);
-        }
-      }
-    }
-    async _loadAccountGoodsList(accountId) {
-      if (!accountId) return;
-      const cached = this._goodsListCacheByAccount.get(accountId);
-      if (cached) {
-        this._accountGoodsList = cached.items;
-        this._goodsListAccountId = accountId;
-        this._goodsListPage = cached.page;
-        this._hasMoreGoodsList = cached.hasMore;
-        return;
-      }
-      this._loadingGoodsList = true;
-      this._accountGoodsList = [];
-      this._goodsListPage = 1;
-      this._hasMoreGoodsList = false;
-      try {
-        const data = await conversationApi.getAccountGoods(accountId, 1, this.GOODS_LIST_PAGE_SIZE, true);
-        const items = (data.items ?? []).filter((g2) => g2.itemStatus === 0 || g2.itemStatus === void 0);
-        this._accountGoodsList = items;
-        this._goodsListAccountId = accountId;
-        this._hasMoreGoodsList = !!data.nextPage;
-        this._saveGoodsListCache(accountId, items, 1, !!data.nextPage);
-      } catch (e7) {
-        console.error("\u52A0\u8F7D\u8D26\u53F7\u5546\u54C1\u5217\u8868\u5931\u8D25", e7);
-        this._accountGoodsList = [];
-      } finally {
-        this._loadingGoodsList = false;
-      }
-    }
-    _saveGoodsListCache(accountId, items, page, hasMore) {
-      if (this._goodsListCacheByAccount.size >= 20) {
-        const firstKey = this._goodsListCacheByAccount.keys().next().value;
-        if (firstKey !== void 0) this._goodsListCacheByAccount.delete(firstKey);
-      }
-      this._goodsListCacheByAccount.set(accountId, { items: [...items], page, hasMore });
-    }
-    async _loadMoreGoodsList() {
-      const accountId = this._goodsListAccountId;
-      if (!accountId || this._loadingMoreGoodsList || !this._hasMoreGoodsList) return;
-      const nextPage = this._goodsListPage + 1;
-      this._loadingMoreGoodsList = true;
-      try {
-        const data = await conversationApi.getAccountGoods(accountId, nextPage, this.GOODS_LIST_PAGE_SIZE);
-        const items = (data.items ?? []).filter((g2) => g2.itemStatus === 0 || g2.itemStatus === void 0);
-        this._accountGoodsList = [...this._accountGoodsList, ...items];
-        this._goodsListPage = nextPage;
-        this._hasMoreGoodsList = !!data.nextPage;
-        this._saveGoodsListCache(accountId, this._accountGoodsList, nextPage, !!data.nextPage);
-      } catch (e7) {
-        console.error("\u52A0\u8F7D\u66F4\u591A\u5546\u54C1\u5931\u8D25", e7);
-      } finally {
-        this._loadingMoreGoodsList = false;
-      }
-    }
-    async _sendProductLink(item) {
-      const conv = this._selectedConversation;
-      if (!conv || this._sendingProductLinkId) return;
-      const toUserId = conv.userId?.trim() || conv.messages?.find((m2) => m2.direction === "in")?.senderId || "";
-      const accountId = conv.accountId;
-      const chatId = conv.chatId;
-      if (!accountId || !chatId || !toUserId) {
-        await getDialog().alert("\u53D1\u9001\u5931\u8D25", "\u65E0\u6CD5\u83B7\u53D6\u5BF9\u65B9\u7528\u6237\u4FE1\u606F\uFF0C\u8BF7\u5237\u65B0\u5BF9\u8BDD\u540E\u518D\u8BD5");
-        return;
-      }
-      const senderName = this._currentAccountForChat?.nickname || conv.accountNickname || "\u6211";
-      const now = Date.now();
-      const nowStr = new Date(now).toISOString();
-      this._sendingProductLinkId = item.id;
-      let optimisticImageUrl = null;
-      try {
-        const blob = await this._renderProductCardToBlob(item);
-        optimisticImageUrl = URL.createObjectURL(blob);
-        const optimisticMessage = {
-          id: -1,
-          senderId: accountId,
-          senderName,
-          content: "[\u56FE\u7247]",
-          msgTime: nowStr,
-          timestamp: now,
-          direction: "out",
-          msgType: "image",
-          imageUrl: optimisticImageUrl
-        };
-        const currentMessages = conv.messages || [];
-        this._selectedConversation = { ...conv, messages: [...currentMessages, optimisticMessage] };
-        this._scrollToBottomAfterUpdate();
-        const file = new File([blob], "product-card.jpg", { type: "image/jpeg" });
-        await conversationApi.sendImageMessage(accountId, chatId, toUserId, file, "product-card.jpg", 280, 360);
-        await conversationApi.sendMessage(accountId, chatId, toUserId, "\u70B9\u6211\u5934\u50CF\u8FDB\u5165\u4E3B\u9875\uFF0C\u627E\u622A\u56FE\u4E2D\u7684\u5546\u54C1\u4E0B\u5355");
-        const detail = await conversationApi.getConversation(accountId, chatId, 50);
-        this._selectedConversation = { ...conv, ...detail, messages: detail.messages };
-        this._syncListDisplayNameFromDetail(accountId, chatId, this.getConversationDisplayName(this._selectedConversation), detail.userAvatar);
-        this._scrollToBottomAfterUpdate();
-      } catch (e7) {
-        console.error("\u53D1\u9001\u5546\u54C1\u5361\u7247\u622A\u56FE\u5931\u8D25", e7);
-        this._selectedConversation = {
-          ...conv,
-          messages: (this._selectedConversation?.messages || []).filter((m2) => m2.id >= 0)
-        };
-        const backendError = e7?.error && (e7.error.error || e7.error.message) || e7?.message || "\u8BF7\u7A0D\u540E\u91CD\u8BD5";
-        await getDialog().alert("\u53D1\u9001\u5931\u8D25", backendError);
-      } finally {
-        if (optimisticImageUrl) URL.revokeObjectURL(optimisticImageUrl);
-        this._sendingProductLinkId = null;
-      }
-    }
-    /* ── Canvas 商品卡片绘制 ── */
-    async _renderProductCardToBlob(item) {
-      const width = 280;
-      const height = 360;
-      const padding = 14;
-      const imgHeight = 200;
-      const cardW = width - padding * 2;
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas 2D \u4E0D\u53EF\u7528");
-      const bg = "#f5f5f5";
-      const textColor = "#333";
-      const priceColor = "#f97316";
-      const linkColor = "#1890ff";
-      const radius = 10;
-      ctx.fillStyle = bg;
-      this._roundRect(ctx, padding, padding, cardW, height - padding * 2, radius);
-      ctx.fill();
-      const proxyUrl = item.picUrl ? conversationApi.getServeImageUrl(item.picUrl.startsWith("//") ? "https:" + item.picUrl : item.picUrl) : "";
-      const directUrl = this.getItemImageUrl(item.picUrl || null);
-      let imgDrawn = false;
-      for (const imgUrl of [proxyUrl, directUrl].filter(Boolean)) {
-        if (imgDrawn) break;
-        try {
-          const img = await this._loadImageForCard(imgUrl);
-          if (img) {
-            const sx = 0, sy = 0, sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
-            const dx = padding + 4, dy = padding + 4, dw = cardW - 8, dh = imgHeight;
-            ctx.save();
-            this._roundRect(ctx, dx, dy, dw, dh, 6);
-            ctx.clip();
-            ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
-            ctx.restore();
-            imgDrawn = true;
-          }
-        } catch {
-        }
-      }
-      if (!imgDrawn) {
-        ctx.fillStyle = "#e0e0e0";
-        ctx.fillRect(padding + 4, padding + 4, cardW - 8, imgHeight);
-        ctx.fillStyle = "#999";
-        ctx.font = "14px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("\u5546\u54C1\u56FE", width / 2, padding + 4 + imgHeight / 2 - 6);
-        ctx.textAlign = "left";
-      }
-      const titleY = padding + imgHeight + 16;
-      const title = (item.title || "\u5546\u54C1 " + item.id).trim();
-      ctx.fillStyle = textColor;
-      ctx.font = "14px sans-serif";
-      ctx.textAlign = "left";
-      const lineHeight = 20;
-      const maxTitleW = cardW - 16;
-      const lines = this._wrapText(ctx, title, maxTitleW);
-      const titleLines = lines.slice(0, 2);
-      titleLines.forEach((line, i6) => {
-        ctx.fillText(line, padding + 8, titleY + i6 * lineHeight);
-      });
-      const priceY = titleY + titleLines.length * lineHeight + 8;
-      ctx.fillStyle = priceColor;
-      ctx.font = "bold 16px sans-serif";
-      ctx.fillText("\xA5" + (item.price || "0"), padding + 8, priceY);
-      ctx.fillStyle = linkColor;
-      ctx.font = "12px sans-serif";
-      ctx.fillText("\u67E5\u770B\u5546\u54C1", padding + 8, priceY + 24);
-      const blob = await new Promise((resolve) => {
-        canvas.toBlob(resolve, "image/jpeg", 0.88);
-      });
-      if (!blob) throw new Error("\u5BFC\u51FA\u56FE\u7247\u5931\u8D25");
-      return blob;
-    }
-    _roundRect(ctx, x2, y3, w2, h3, r6) {
-      ctx.beginPath();
-      ctx.moveTo(x2 + r6, y3);
-      ctx.lineTo(x2 + w2 - r6, y3);
-      ctx.quadraticCurveTo(x2 + w2, y3, x2 + w2, y3 + r6);
-      ctx.lineTo(x2 + w2, y3 + h3 - r6);
-      ctx.quadraticCurveTo(x2 + w2, y3 + h3, x2 + w2 - r6, y3 + h3);
-      ctx.lineTo(x2 + r6, y3 + h3);
-      ctx.quadraticCurveTo(x2, y3 + h3, x2, y3 + h3 - r6);
-      ctx.lineTo(x2, y3 + r6);
-      ctx.quadraticCurveTo(x2, y3, x2 + r6, y3);
-      ctx.closePath();
-    }
-    _wrapText(ctx, text, maxWidth) {
-      const lines = [];
-      let remaining = text;
-      while (remaining && lines.length < 3) {
-        let low = 0, high = remaining.length;
-        while (low < high) {
-          const mid = Math.ceil((low + high) / 2);
-          if (ctx.measureText(remaining.slice(0, mid)).width <= maxWidth) low = mid;
-          else high = mid - 1;
-        }
-        const take = Math.max(1, low);
-        lines.push(remaining.slice(0, take));
-        remaining = remaining.slice(take);
-      }
-      return lines;
-    }
-    _loadImageForCard(src) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
-        if (src.includes("/api/goods/serve-image")) {
-          const token = localStorage.getItem("auth_token");
-          fetch(src, {
-            credentials: "same-origin",
-            headers: token ? { Authorization: `Bearer ${token}` } : {}
-          }).then((res) => {
-            if (!res.ok) {
-              resolve(null);
-              return;
-            }
-            const ct = res.headers.get("Content-Type") || "";
-            if (!ct.startsWith("image/")) {
-              resolve(null);
-              return;
-            }
-            return res.blob();
-          }).then((blob) => {
-            if (blob) img.src = URL.createObjectURL(blob);
-            else resolve(null);
-          }).catch(() => resolve(null));
-        } else {
-          img.crossOrigin = "anonymous";
-          img.src = src;
-        }
-      });
     }
     /* ── 图片预览 ── */
     openImage(url) {
@@ -2416,13 +3051,19 @@ ${m2}` : m2))
       }
       const key = this._getConversationKey(conv);
       const over = this._displayNameOverrides.get(key);
-      if (over?.userName) return over.userName;
+      if (over?.userName && !isInvalidDisplayName(over.userName)) return over.userName;
       return this.getConversationDisplayName(conv);
     }
     getListDisplayAvatar(conv) {
       const key = this._getConversationKey(conv);
       const over = this._displayNameOverrides.get(key);
-      if (over?.userAvatar !== void 0) return over.userAvatar;
+      if (over?.userAvatar !== void 0) {
+        const acct = this._accounts.find((a3) => a3.id === conv.accountId);
+        if (acct?.avatar && over.userAvatar === acct.avatar) {
+        } else {
+          return over.userAvatar;
+        }
+      }
       if (this._isOpenConversation(conv) && this._selectedConversation) {
         const fromSel = this.getConversationDisplayAvatar(this._selectedConversation);
         if (fromSel) return fromSel;
@@ -2432,8 +3073,10 @@ ${m2}` : m2))
     _syncListDisplayNameFromDetail(accountId, chatId, userName, userAvatar) {
       if (!userName?.trim() || isInvalidDisplayName(userName)) return;
       const key = `${accountId}:${chatId}`;
-      this._displayNameOverrides.set(key, { userName: userName.trim(), userAvatar });
-      const patch = (c4) => c4.accountId === accountId && c4.chatId === chatId && isInvalidDisplayName(c4.userName ?? "") ? { ...c4, userName: userName.trim(), userAvatar: userAvatar ?? c4.userAvatar } : c4;
+      const acct = this._accounts.find((a3) => a3.id === accountId);
+      const safeAvatar = userAvatar && acct?.avatar && userAvatar === acct.avatar ? void 0 : userAvatar;
+      this._displayNameOverrides.set(key, { userName: userName.trim(), userAvatar: safeAvatar });
+      const patch = (c4) => c4.accountId === accountId && c4.chatId === chatId && isInvalidDisplayName(c4.userName ?? "") ? { ...c4, userName: userName.trim(), userAvatar: safeAvatar ?? c4.userAvatar } : c4;
       this._todayConversations = this._todayConversations.map(patch);
       this._historyConversations = this._historyConversations.map(patch);
     }
@@ -2476,11 +3119,12 @@ ${m2}` : m2))
       } else {
         const item = this._conversationItem;
         if (item && item.id === itemId) {
-          if (!item.title && !item.price) {
-            result = null;
-          } else {
-            result = { id: item.id, title: item.title || "", picUrl: item.picUrl || "", price: item.price || "" };
-          }
+          result = {
+            id: item.id,
+            title: item.title || `\u5546\u54C1 ${itemId}`,
+            picUrl: item.picUrl || "",
+            price: item.price || ""
+          };
         }
       }
       if (this._messageItemCache.size > 500) {
@@ -2494,7 +3138,16 @@ ${m2}` : m2))
     _getMessageCardItem(msg) {
       if (msg.direction !== "out") return null;
       const itemId = this._getMessageItemId(msg);
-      return itemId ? this._getMessageItem(itemId) : null;
+      if (!itemId) return null;
+      if (msg.itemTitle || msg.itemPicUrl || msg.itemPrice) {
+        return {
+          id: itemId,
+          title: msg.itemTitle || "",
+          picUrl: msg.itemPicUrl || "",
+          price: msg.itemPrice || ""
+        };
+      }
+      return this._getMessageItem(itemId);
     }
     async _loadMessageItemsAsync(accountId, itemIds) {
       if (!itemIds.length) return;
@@ -2502,6 +3155,19 @@ ${m2}` : m2))
       const item = this._conversationItem;
       if (item && item.id && itemIds.includes(item.id)) {
         itemsMap.set(item.id, { id: item.id, title: item.title || "", picUrl: item.picUrl || "", price: item.price || "" });
+      }
+      const msgs = this._selectedConversation?.messages ?? [];
+      for (const m2 of msgs) {
+        const id = m2.itemId || this._getItemIdFromGoofishUrl(m2.content);
+        if (!id || !itemIds.includes(id) || itemsMap.has(id)) continue;
+        if (m2.itemTitle || m2.itemPicUrl || m2.itemPrice) {
+          itemsMap.set(id, {
+            id,
+            title: m2.itemTitle || "",
+            picUrl: m2.itemPicUrl || "",
+            price: m2.itemPrice || ""
+          });
+        }
       }
       const now = Date.now();
       const remainingIds = itemIds.filter((id) => !itemsMap.has(id));
@@ -2513,21 +3179,23 @@ ${m2}` : m2))
       });
       const stillRemainingIds = remainingIds.filter((id) => !itemsMap.has(id));
       if (stillRemainingIds.length > 0) {
-        for (let page = 1; page <= 5 && stillRemainingIds.some((id) => !itemsMap.has(id)); page++) {
-          try {
-            const goodsRes = await conversationApi.getAccountGoods(accountId, page);
-            stillRemainingIds.forEach((id) => {
-              const found = goodsRes.items?.find((g2) => g2.id === id);
-              if (found) {
-                const info = { id: found.id, title: found.title, picUrl: found.picUrl, price: found.price };
-                itemsMap.set(id, info);
-                this._goodsInfoCache.set(id, { ...info, timestamp: now });
-              }
-            });
-            if (!goodsRes.nextPage || stillRemainingIds.every((id) => itemsMap.has(id))) break;
-          } catch {
-            break;
+        try {
+          const snapRes = await conversationApi.getItemsFromSnapshotBatch(accountId, stillRemainingIds);
+          const rowItems = snapRes?.items ?? {};
+          for (const id of stillRemainingIds) {
+            const row = rowItems[id];
+            if (row && (row.title || row.picUrl || row.price)) {
+              const info = {
+                id: row.id,
+                title: row.title || "",
+                picUrl: row.picUrl || "",
+                price: row.price || ""
+              };
+              itemsMap.set(id, info);
+              this._goodsInfoCache.set(id, { ...info, timestamp: now });
+            }
           }
+        } catch {
         }
       }
       if (itemsMap.size > 0) {
@@ -2566,11 +3234,12 @@ ${m2}` : m2))
             <div class="conversations-page">
                 ${this._renderHeader()}
                 <div class="conversations-card">
-                    <div class="conversations-three-columns" style="--conversation-columns: ${this._showGoodsListColumn ? 4 : 3}; gap: 0; column-gap: 0; row-gap: 0;">
-                        ${this._renderLeftColumn()}
-                        ${this._renderMiddleColumn()}
-                        ${this._renderRightColumn()}
-                        ${this._showGoodsListColumn ? this._renderGoodsListColumn() : A}
+                    <div class="conversations-unified-shell">
+                        <div class="conversations-three-columns conversations-layout-with-quick" style="gap: 0; column-gap: 0; row-gap: 0;">
+                            ${this._renderLeftColumn()}
+                            ${this._renderMiddleColumn()}
+                            ${this._renderQuickReplyColumn()}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2584,11 +3253,218 @@ ${m2}` : m2))
                     <h1 class="text-2xl font-bold">对话消息</h1>
                     <p class="text-sm text-base-content/60 mt-1">查看和管理与买家的对话消息</p>
                 </div>
-                <label class="conversation-goods-list-toggle flex items-center gap-2 cursor-pointer shrink-0">
-                    <span class="text-sm font-medium text-base-content/80">商品列表</span>
-                    <input type="checkbox" class="toggle toggle-sm" .checked=${this._showGoodsListColumn}
-                        @change=${() => this._toggleShowGoodsListColumn()} />
-                </label>
+            </div>
+        `;
+    }
+    /** 右侧：独立快捷话术库（树状文件夹 + 列表，可在此维护并一键发送） */
+    _renderQuickReplyColumn() {
+      const sendingBlocked = this._sendingReply || this._quickSendingId != null;
+      return b2`
+            <div class="conversation-column col-quick">
+                <div class="conv-quick-root">
+                    <div class="conv-quick-toolbar">
+                        <div class="min-w-0">
+                            <div class="conv-quick-toolbar-title">快捷回复</div>
+                            <div class="conv-quick-toolbar-hint">独立存储，仅用于本页对话</div>
+                        </div>
+                        <button
+                            type="button"
+                            class="conversation-header-icon-btn btn btn-sm btn-ghost shrink-0"
+                            ?disabled=${this._quickListLoading}
+                            @click=${() => void this._loadQuickReplyPanel()}
+                            title="刷新列表"
+                        >
+                            ${this._quickListLoading ? b2`<span class="loading loading-spinner loading-xs"></span>` : iconHtml("RefreshCw")}
+                        </button>
+                    </div>
+                    <div class="conv-quick-body">
+                        <div class="conv-quick-folder-panel">
+                            <div class="conv-quick-folder-head-row flex">
+                                <span class="conv-quick-folder-head">文件夹</span>
+                                <div class="conv-quick-folder-head-actions ml-auto">
+                                    <button
+                                        type="button"
+                                        class="conversation-header-icon-btn btn btn-sm btn-ghost"
+                                        @click=${() => void this._addQuickFolder()}
+                                        title="新建文件夹"
+                                    >
+                                        ${iconHtml("Plus")}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="conversation-header-icon-btn btn btn-sm btn-ghost ${this._quickFolderEditMode ? "conv-quick-pencil-active" : ""}"
+                                        @click=${() => this._toggleQuickFolderEditMode()}
+                                        title="${this._quickFolderEditMode ? "\u5B8C\u6210" : "\u7F16\u8F91\u6587\u4EF6\u5939"}"
+                                    >
+                                        ${iconHtml("Pencil")}
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="conv-quick-folder-scroll messages-scroll">
+                                <button
+                                    type="button"
+                                    class="conv-quick-folder-btn ${this._quickFolderFilter === void 0 ? "conv-quick-folder-active" : ""}"
+                                    @click=${() => this._selectQuickFolder(void 0)}
+                                >
+                                    <span class="conv-quick-folder-ico w-3 h-3 shrink-0" .innerHTML=${ICONS.Folder}></span>
+                                    <span class="truncate">全部</span>
+                                </button>
+                                ${this._quickHasUncat ? b2`
+                                          <button
+                                              type="button"
+                                              class="conv-quick-folder-btn ${this._quickFolderFilter === "uncategorized" ? "conv-quick-folder-active" : ""}"
+                                              @click=${() => this._selectQuickFolder("uncategorized")}
+                                          >
+                                              <span
+                                                  class="conv-quick-folder-ico w-3 h-3 shrink-0 text-warning"
+                                                  .innerHTML=${ICONS.Folder}
+                                              ></span>
+                                              <span class="truncate">未分组</span>
+                                          </button>
+                                      ` : A}
+                                ${this._quickFolders.map(
+        (f3) => b2`
+                                        <div class="flex w-full items-stretch gap-0" style="margin-bottom:0.125rem">
+                                            <button
+                                                type="button"
+                                                class="conv-quick-folder-btn flex-1 min-w-0 ${this._quickFolderFilter === f3.id ? "conv-quick-folder-active" : ""}"
+                                                @click=${() => this._selectQuickFolder(f3.id)}
+                                                title=${f3.name}
+                                            >
+                                                <span
+                                                    class="conv-quick-folder-ico w-3 h-3 shrink-0"
+                                                    .innerHTML=${ICONS.Folder}
+                                                ></span>
+                                                <span class="truncate">${f3.name}</span>
+                                            </button>
+                                            ${this._quickFolderEditMode ? b2`
+                                                      <div class="conv-quick-folder-row-actions flex flex-row items-center">
+                                                          <button
+                                                              type="button"
+                                                              class="conversation-header-icon-btn btn btn-sm btn-ghost"
+                                                              @click=${(e7) => {
+          e7.stopPropagation();
+          void this._renameQuickFolder(f3);
+        }}
+                                                              title="重命名"
+                                                          >
+                                                              ${iconHtml("Pencil")}
+                                                          </button>
+                                                          <button
+                                                              type="button"
+                                                              class="conversation-header-icon-btn btn btn-sm btn-ghost selection-trash-btn"
+                                                              @click=${(e7) => {
+          e7.stopPropagation();
+          void this._deleteQuickFolder(f3);
+        }}
+                                                              title="删除"
+                                                          >
+                                                              ${iconHtml("Trash2")}
+                                                          </button>
+                                                      </div>
+                                                  ` : A}
+                                        </div>
+                                    `
+      )}
+                            </div>
+                        </div>
+                        <div class="conv-quick-main">
+                            <div class="conv-quick-search">
+                                <input
+                                    type="search"
+                                    placeholder="搜索标题或内容…"
+                                    autocomplete="off"
+                                    .value=${this._quickSearch}
+                                    @input=${(e7) => this._onQuickSearchInput(e7)}
+                                />
+                            </div>
+                            <div class="conv-quick-items messages-scroll">
+                                ${this._quickListLoading && this._quickItems.length === 0 ? b2`
+                                          <div class="flex justify-center py-8">
+                                              <span class="loading loading-spinner loading-sm text-primary"></span>
+                                          </div>
+                                      ` : this._quickItems.length === 0 ? b2`
+                                            <div class="conv-quick-empty">
+                                                暂无快捷话术。在下方填写标题与内容后点「添加话术」；当前列表筛选为「全部」时，新话术归入未分组。
+                                            </div>
+                                        ` : this._quickItems.map(
+        (item) => b2`
+                                                <div class="conv-quick-item-row">
+                                                    <div class="conv-quick-item-name">${item.name || "\u672A\u547D\u540D"}</div>
+                                                    <div class="conv-quick-item-preview">
+                                                        ${this._truncateQuickPreview(item.content, 96) || "\uFF08\u5185\u5BB9\u4E3A\u7A7A\uFF09"}
+                                                    </div>
+                                                    <div class="conv-quick-item-row-btns">
+                                                        <button
+                                                            type="button"
+                                                            class="conversation-header-icon-btn btn btn-sm btn-ghost"
+                                                            ?disabled=${sendingBlocked}
+                                                            title="编辑"
+                                                            @click=${() => this._startEditItem(item)}
+                                                        >
+                                                            ${iconHtml("Pencil")}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            class="conversation-header-icon-btn btn btn-sm btn-ghost selection-trash-btn"
+                                                            title="删除"
+                                                            @click=${() => void this._deleteQuickItem(item)}
+                                                        >
+                                                            ${iconHtml("Trash2")}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            class="btn btn-sm btn-primary reply-send-btn conv-quick-send-btn gap-0.5"
+                                                            ?disabled=${sendingBlocked}
+                                                            @click=${() => void this._sendQuickItem(item)}
+                                                        >
+                                                            ${this._quickSendingId === item.id ? b2`<span class="loading loading-spinner loading-xs"></span>` : b2`${iconHtml("Send")}发送`}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            `
+      )}
+                            </div>
+                            <div class="conv-quick-composer">
+                                <div class="text-[10px] font-medium text-base-content/50 px-0.5">
+                                    ${this._quickEditItemId != null ? "\u7F16\u8F91\u8BDD\u672F" : "\u6DFB\u52A0\u8BDD\u672F"}
+                                    （归入当前所选文件夹；选「全部」时为未分组）
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="标题"
+                                    .value=${this._quickDraftName}
+                                    @input=${(e7) => this._onQuickDraftNameInput(e7)}
+                                />
+                                <textarea
+                                    placeholder="发送给买家的文本内容"
+                                    .value=${this._quickDraftContent}
+                                    @input=${(e7) => this._onQuickDraftContentInput(e7)}
+                                ></textarea>
+                                <div class="conv-quick-composer-actions">
+                                    ${this._quickEditItemId != null ? b2`
+                                              <button
+                                                  type="button"
+                                                  class="btn btn-sm conv-quick-composer-cancel-btn"
+                                                  ?disabled=${this._quickSavingDraft}
+                                                  @click=${() => this._cancelQuickDraft()}
+                                              >
+                                                  取消
+                                              </button>
+                                          ` : A}
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-primary reply-send-btn"
+                                        ?disabled=${this._quickSavingDraft}
+                                        @click=${() => void this._saveQuickDraft()}
+                                    >
+                                        ${this._quickSavingDraft ? b2`<span class="loading loading-spinner loading-xs"></span>` : this._quickEditItemId != null ? "\u4FDD\u5B58\u4FEE\u6539" : "\u6DFB\u52A0\u8BDD\u672F"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -2596,29 +3472,32 @@ ${m2}` : m2))
     _renderLeftColumn() {
       return b2`
             <div class="conversation-column col-list">
-                <div class="column-header card glass-card p-3 mb-2 flex flex-nowrap items-center justify-between">
+                <div class="column-header conversation-toolbar p-3 flex flex-nowrap items-center justify-between">
                     <div class="column-header-left flex items-center gap-2 min-w-0 flex-1 flex-nowrap overflow-hidden column-header-badges">
-                        <span class="column-title shrink-0">聊天列表</span>
-                        <span class="badge badge-ghost badge-sm shrink-0 column-header-count-badge">${this._todayConversations.length} 今天 / ${this._historyLoaded ? this._historyTotal + " \u5386\u53F2" : "\u5386\u53F2(\u70B9\u51FB\u52A0\u8F7D)"}</span>
+                        <span class="column-title shrink-0 whitespace-nowrap">聊天列表</span>
+                        <span
+                            class="badge badge-ghost badge-sm column-header-count-badge min-w-0 self-center"
+                            title="${this._todayConversations.length} 今天 / ${this._historyLoaded ? this._historyTotal + " \u5386\u53F2" : "\u5386\u53F2(\u70B9\u51FB\u52A0\u8F7D)"}"
+                        ><span class="block truncate">${this._todayConversations.length} 今天 / ${this._historyLoaded ? this._historyTotal + " \u5386\u53F2" : "\u5386\u53F2(\u70B9\u51FB\u52A0\u8F7D)"}</span></span>
                         ${this._hasUnread() ? b2`<span class="badge badge-primary badge-sm bg-gradient-to-r from-red-500 to-pink-500 border-0 shrink-0">${this._getTotalUnread()} 未读</span>` : A}
                     </div>
                     <div class="column-actions flex shrink-0 items-center gap-1">
                         ${this._selectionMode ? b2`
-                            <button class="btn btn-sm btn-error" ?disabled=${this._getSelectedCount() === 0} @click=${() => this._deleteSelectedConversations()}>
+                            <button class="conversation-header-icon-btn btn btn-sm selection-trash-btn" ?disabled=${this._getSelectedCount() === 0} @click=${() => this._deleteSelectedConversations()} title="删除所选">
                                 ${this._deletingSelected ? b2`<span class="loading loading-spinner loading-xs"></span>` : iconHtml("Trash2")}
                             </button>
-                            <button class="btn btn-sm btn-ghost" @click=${() => this._toggleSelectionMode()}>${iconHtml("X")}</button>
+                            <button class="conversation-header-icon-btn btn btn-sm btn-ghost" @click=${() => this._toggleSelectionMode()} title="退出多选">${iconHtml("X")}</button>
                         ` : b2`
                             ${this._hasUnread() ? b2`
-                                <button class="btn btn-sm" ?disabled=${this._clearingUnread} @click=${() => this._clearAllUnread()}>
+                                <button class="conversation-header-icon-btn btn btn-sm btn-ghost" ?disabled=${this._clearingUnread} @click=${() => this._clearAllUnread()}>
                                     ${this._clearingUnread ? b2`<span class="loading loading-spinner loading-xs"></span>` : iconHtml("CheckCircle")}
                                 </button>
                             ` : A}
-                            <button class="btn btn-sm btn-ghost" @click=${() => this._toggleDesktopNotification()} title="${this._desktopNotificationEnabled ? "\u5173\u95ED\u684C\u9762\u901A\u77E5" : "\u5F00\u542F\u684C\u9762\u901A\u77E5"}">
+                            <button class="conversation-header-icon-btn btn btn-sm btn-ghost" @click=${() => this._toggleDesktopNotification()} title="${this._desktopNotificationEnabled ? "\u5173\u95ED\u684C\u9762\u901A\u77E5" : "\u5F00\u542F\u684C\u9762\u901A\u77E5"}">
                                 ${iconHtml("Bell")}
                             </button>
-                            <button class="btn btn-sm btn-ghost" @click=${() => this._toggleSelectionMode()} title="多选">${iconHtml("CheckSquare")}</button>
-                            <button class="btn btn-sm" ?disabled=${this._loading} @click=${() => this.loadConversations()}>
+                            <button class="conversation-header-icon-btn btn btn-sm btn-ghost" @click=${() => this._toggleSelectionMode()} title="多选">${iconHtml("CheckSquare")}</button>
+                            <button class="conversation-header-icon-btn btn btn-sm" ?disabled=${this._loading} @click=${() => this.loadConversations()}>
                                 ${this._loading ? b2`<span class="loading loading-spinner loading-xs"></span>` : iconHtml("RefreshCw")}
                             </button>
                         `}
@@ -2627,13 +3506,13 @@ ${m2}` : m2))
                 ${this._selectionMode ? b2`
                     <div class="column-header-extra delete-older-than-row">
                         <span class="delete-older-than-label">删除</span>
-                        <input type="number" class="input input-bordered input-sm w-14 text-center" min="1" max="365"
+                        <input type="number" class="delete-older-than-days-input" min="1" max="365" inputmode="numeric"
                             .value=${String(this._deleteOlderThanDays)}
                             @input=${(e7) => {
         this._deleteOlderThanDays = Math.max(1, Math.min(365, +e7.target.value || 1));
       }} />
                         <span class="delete-older-than-label">天前的消息</span>
-                        <button class="btn btn-sm btn-warning" ?disabled=${this._deletingOlderThan} @click=${() => this._deleteConversationsOlderThanDays()} title="一键删除早期对话及消息，释放硬盘空间">
+                        <button type="button" class="btn-delete-older-bulk" ?disabled=${this._deletingOlderThan} @click=${() => this._deleteConversationsOlderThanDays()} title="一键删除早期对话及消息，释放硬盘空间">
                             ${this._deletingOlderThan ? b2`<span class="loading loading-spinner loading-xs"></span>` : "\u4E00\u952E\u5220\u9664"}
                         </button>
                     </div>
@@ -2671,12 +3550,10 @@ ${m2}` : m2))
       if (this._todayConversations.length === 0 && this._historyTotal === 0) {
         return b2`
                 <div class="space-y-1.5">
-                    <div class="card glass-card">
-                        <div class="card-body flex flex-col items-center justify-center py-16 text-base-content/60">
-                            <span class="w-16 h-16 mb-4 opacity-30" .innerHTML=${ICONS.MessageCircle}></span>
-                            <p class="text-lg">暂无当天对话</p>
-                            <p class="text-sm mt-1">可点击下方「历史对话」加载更早的对话</p>
-                        </div>
+                    <div class="conversation-list-empty-panel flex flex-col items-center justify-center py-16 text-base-content/60">
+                        <span class="w-16 h-16 mb-4 opacity-30" .innerHTML=${ICONS.MessageCircle}></span>
+                        <p class="text-lg">暂无当天对话</p>
+                        <p class="text-sm mt-1">可点击下方「历史对话」加载更早的对话</p>
                     </div>
                     ${this._renderHistoryFolder()}
                 </div>
@@ -2694,7 +3571,7 @@ ${m2}` : m2))
                     ${this._historyExpanded ? b2`
                         <div class="space-y-1.5 pl-2 border-l-2 border-base-300">
                             ${this._loadingHistory ? b2`
-                                <div class="card glass-card"><div class="card-body flex justify-center py-4"><span class="loading loading-spinner loading-sm"></span></div></div>
+                                <div class="flex justify-center py-4 border-t border-base-300/40"><span class="loading loading-spinner loading-sm"></span></div>
                             ` : b2`
                                 ${this._historyConversations.map((conv) => this._renderConversationCard(conv))}
                                 <div class="history-load-more-footer flex justify-center py-2">
@@ -2716,9 +3593,8 @@ ${m2}` : m2))
     }
     _renderHistoryFolder() {
       return b2`
-            <div class="card glass-card conversation-list-card conversation-list-history-folder cursor-pointer"
+            <div class="conversation-history-folder-bar cursor-pointer"
                 @click=${() => !this._selectionMode && this.expandHistoryFolder()}>
-                <div class="card-body p-2">
                     <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded-lg bg-base-200 flex items-center justify-center flex-shrink-0">
                             ${this._loadingHistory ? b2`<span class="loading loading-spinner loading-xs"></span>` : b2`<span class="w-4 h-4 text-base-content/60" .innerHTML=${ICONS.Folder}></span>`}
@@ -2732,7 +3608,6 @@ ${m2}` : m2))
                         </div>
                         <span class="w-3.5 h-3.5 text-base-content/50 shrink-0 history-folder-arrow" .innerHTML=${this._historyExpanded ? ICONS.ChevronDown : ICONS.ChevronUp}></span>
                     </div>
-                </div>
             </div>
         `;
     }
@@ -2764,7 +3639,7 @@ ${m2}` : m2))
                             </div>
                         ` : A}
                         <div class="avatar w-10 h-10 flex-shrink-0" @click=${(e7) => e7.stopPropagation()}>
-                            ${displayAvatar ? b2`<div class="w-10 h-10 rounded-full"><img src="${displayAvatar}" alt="${displayName}" loading="lazy" /></div>` : b2`<div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-sm font-medium flex items-center justify-center">${displayName.charAt(0)}</div>`}
+                            ${displayAvatar ? b2`<div class="w-10 h-10 rounded-full overflow-hidden"><img class="w-full h-full object-cover" src="${displayAvatar}" alt="${displayName}" loading="lazy" /></div>` : b2`<div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-sm font-medium flex items-center justify-center">${displayName.charAt(0)}</div>`}
                         </div>
                         <div class="flex-1 min-w-0 flex flex-col gap-1">
                             <div class="flex items-center justify-between gap-2 min-h-0">
@@ -2798,32 +3673,49 @@ ${m2}` : m2))
         `;
     }
     /* ── 中栏 ── */
+    /** 正在咨询的宝贝：仅标题一行，显示在会话顶栏（原第三列已移除） */
+    _renderConsultingProductTitle(conv) {
+      const fromApi = this._conversationItem;
+      const fromList = conv.item;
+      const title = (fromApi?.title || fromList?.title || "").trim();
+      const id = (fromApi?.id || fromList?.id || "").trim();
+      const line = title || (id ? `\u5546\u54C1 ${id}` : "");
+      if (line) {
+        const full = title || line;
+        return b2`<p class="consulting-product-title text-xs text-base-content/80 mt-1" title="${full}">${line}</p>`;
+      }
+      if (id && !fromApi) {
+        return b2`<p class="text-xs text-base-content/50 mt-1">商品信息加载中…</p>`;
+      }
+      return A;
+    }
     _renderMiddleColumn() {
       const conv = this._selectedConversation;
       return b2`
             <div class="conversation-column col-chat flex flex-col flex-1 min-h-0">
                 <div class="column-chat flex flex-col flex-1 min-h-0">
-                    <div class="card glass-card p-3 mb-2 flex-shrink-0 conversation-header-card">
+                    <div class="column-header conversation-toolbar p-3 flex-shrink-0 conversation-header-card">
                         ${conv ? b2`
-                            <div class="flex items-center gap-3 min-w-0">
-                                <div class="avatar w-8 h-8 flex-shrink-0">
-                                    ${this.getListDisplayAvatar(conv) ? b2`<div class="w-8 h-8 rounded-full"><img src="${this.getListDisplayAvatar(conv)}" alt="${this.getListDisplayName(conv)}" loading="lazy" /></div>` : b2`<div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-xs font-medium flex items-center justify-center"><span>${this.getListDisplayName(conv).charAt(0)}</span></div>`}
+                            <div class="flex items-start gap-3 min-w-0">
+                                <div class="avatar w-8 h-8 flex-shrink-0 mt-0.5">
+                                    ${this.getListDisplayAvatar(conv) ? b2`<div class="w-8 h-8 rounded-full overflow-hidden"><img class="w-full h-full object-cover" src="${this.getListDisplayAvatar(conv)}" alt="${this.getListDisplayName(conv)}" loading="lazy" /></div>` : b2`<div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-xs font-medium flex items-center justify-center"><span>${this.getListDisplayName(conv).charAt(0)}</span></div>`}
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center gap-2 flex-wrap">
                                         <span class="font-semibold truncate">${this.getListDisplayName(conv)}</span>
                                         ${conv.accountNickname ? b2`<span class="badge badge-ghost badge-xs font-normal">${conv.accountNickname}</span>` : A}
                                     </div>
+                                    ${this._renderConsultingProductTitle(conv)}
                                 </div>
                             </div>
                         ` : b2`
-                            <div class="flex items-center gap-3 min-w-0 text-base-content/50">
-                                <span class="w-8 h-8 opacity-50" .innerHTML=${ICONS.MessageCircle}></span>
-                                <span class="text-sm">从左侧选择一条对话</span>
+                            <div class="flex items-center gap-3 min-w-0 w-full text-base-content/50">
+                                <span class="w-8 h-8 shrink-0 opacity-50" .innerHTML=${ICONS.MessageCircle}></span>
+                                <span class="text-sm min-w-0 truncate">从左侧选择一条对话</span>
                             </div>
                         `}
                     </div>
-                    <div class="flex-1 min-h-0 card glass-card overflow-hidden">
+                    <div class="flex-1 min-h-0 conversation-messages-pane overflow-hidden">
                         ${conv ? this._renderMessages(conv) : b2`
                             <div class="flex flex-col items-center justify-center h-full min-h-[200px] text-base-content/50">
                                 <span class="w-16 h-16 mb-3 opacity-40" .innerHTML=${ICONS.MessageCircle}></span>
@@ -2853,7 +3745,10 @@ ${m2}` : m2))
                         </button>
                     </div>
                 ` : A}
-                <div class="messages-viewport messages-scroll pt-4 pb-4 flex-1 min-h-0 overflow-y-auto flex flex-col" @scroll=${(e7) => this._onMessagesScroll(e7)}>
+                <div class="messages-viewport messages-scroll pt-4 pb-4 flex-1 min-h-0 overflow-y-auto flex flex-col"
+                    @click=${() => this._markSelectedConversationAsReadIfNeeded()}
+                    @pointerdown=${() => this._markSelectedConversationAsReadIfNeeded()}
+                    @scroll=${(e7) => this._onMessagesScroll(e7)}>
                     <div class="messages-list-content px-8">
                         ${sorted.map((msg) => this._renderMessageRow(conv, msg))}
                     </div>
@@ -2869,11 +3764,11 @@ ${m2}` : m2))
             <div class="conversation-message-row flex gap-5 mb-4 relative ${isOut ? "flex-row-reverse" : ""}">
                 ${isIn ? b2`
                     <div class="avatar w-8 h-8 flex-shrink-0">
-                        ${this.getListDisplayAvatar(conv) ? b2`<div class="w-8 h-8 rounded-full"><img src="${this.getListDisplayAvatar(conv)}" alt="${this.getListDisplayName(conv)}" loading="lazy" /></div>` : b2`<div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-xs font-medium flex items-center justify-center"><span>${this.getListDisplayName(conv).charAt(0)}</span></div>`}
+                        ${this.getListDisplayAvatar(conv) ? b2`<div class="w-8 h-8 rounded-full overflow-hidden"><img class="w-full h-full object-cover" src="${this.getListDisplayAvatar(conv)}" alt="${this.getListDisplayName(conv)}" loading="lazy" /></div>` : b2`<div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-xs font-medium flex items-center justify-center"><span>${this.getListDisplayName(conv).charAt(0)}</span></div>`}
                     </div>
                 ` : isOut ? b2`
                     <div class="avatar w-8 h-8 flex-shrink-0">
-                        ${this._currentAccountForChat?.avatar ? b2`<div class="w-8 h-8 rounded-full"><img src="${this._currentAccountForChat.avatar}" alt="${this._currentAccountForChat.nickname || conv.accountNickname}" loading="lazy" /></div>` : b2`<div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-xs font-medium flex items-center justify-center"><span>${(this._currentAccountForChat?.nickname || conv.accountNickname || "\u6211").charAt(0)}</span></div>`}
+                        ${this._currentAccountForChat?.avatar ? b2`<div class="w-8 h-8 rounded-full overflow-hidden"><img class="w-full h-full object-cover" src="${this._currentAccountForChat.avatar}" alt="${this._currentAccountForChat.nickname || conv.accountNickname}" loading="lazy" /></div>` : b2`<div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/30 text-primary text-xs font-medium flex items-center justify-center"><span>${(this._currentAccountForChat?.nickname || conv.accountNickname || "\u6211").charAt(0)}</span></div>`}
                     </div>
                 ` : A}
                 <div class="flex flex-col max-w-[70%] ${isOut ? "items-end" : "items-start"}">
@@ -2905,13 +3800,15 @@ ${m2}` : m2))
       const cardItem = this._getMessageCardItem(msg);
       if (cardItem) {
         return b2`
-                <div class="goods-card-in-message flex flex-col gap-1 p-1.5 rounded-lg bg-base-200/50 border border-base-300/50">
+                <div class="goods-card-in-message flex flex-row gap-2 p-1.5 rounded-lg bg-base-200/50 border border-base-300/50 items-start">
                     ${cardItem.picUrl ? b2`
-                        <a href="${this.getGoodsItemUrl(cardItem.id)}" target="_blank" rel="noopener noreferrer" class="block w-full overflow-hidden rounded-md">
-                            <img src="${this.getItemImageUrlThumb(cardItem.picUrl)}" alt="${cardItem.title}" class="w-full max-w-[100px] max-h-[100px] object-cover" loading="lazy" />
+                        <a href="${this.getGoodsItemUrl(cardItem.id)}" target="_blank" rel="noopener noreferrer"
+                            class="block shrink-0 w-[110px] h-[78px] overflow-hidden rounded-md">
+                            <img src="${this.getItemImageUrlThumb(cardItem.picUrl)}" alt="${cardItem.title}"
+                                class="w-full h-full object-cover" loading="lazy" />
                         </a>
                     ` : A}
-                    <div class="flex flex-col gap-0 min-w-0">
+                    <div class="flex flex-col gap-0 min-w-0 flex-1 pt-0.5">
                         <p class="text-xs font-medium break-words line-clamp-2" title="${cardItem.title}">${cardItem.title || "\u5546\u54C1 " + cardItem.id}</p>
                         ${cardItem.price ? b2`<p class="text-xs font-semibold text-primary">¥${cardItem.price}</p>` : A}
                         <a href="${this.getGoodsItemUrl(cardItem.id)}" target="_blank" rel="noopener noreferrer" class="text-[11px] link link-primary mt-0.5">查看商品</a>
@@ -2932,8 +3829,8 @@ ${m2}` : m2))
     _renderReplyArea() {
       const conv = this._selectedConversation;
       return b2`
-            <div class="reply-area card glass-card mt-4 flex-shrink-0">
-                <div class="card-body p-4">
+            <div class="reply-area flex-shrink-0">
+                <div class="p-4">
                     ${conv ? b2`
                         ${this._pendingImages.length > 0 ? b2`
                             <div class="flex flex-wrap gap-2 mb-3">
@@ -2949,11 +3846,13 @@ ${m2}` : m2))
                                 `)}
                             </div>
                         ` : A}
-                        <div class="flex gap-2 items-center">
+                        <div class="flex gap-2 items-center min-w-0 w-full">
                             <div class="flex-1 min-w-0 flex flex-col gap-2">
                                 <textarea class="textarea textarea-bordered textarea-sm w-full min-h-[60px] max-h-[140px] resize-y reply-textarea"
                                     placeholder="输入消息回复，Enter 发送，Shift+Enter 换行，支持粘贴图片（Ctrl+V）"
                                     .value=${this._replyText}
+                                    @click=${() => this._markSelectedConversationAsReadIfNeeded()}
+                                    @focus=${() => this._markSelectedConversationAsReadIfNeeded()}
                                     @input=${(e7) => this._onReplyInput(e7)}
                                     @paste=${(e7) => this._onReplyPaste(e7)}
                                     @keydown=${(e7) => this._onReplyKeydown(e7)}
@@ -2977,94 +3876,6 @@ ${m2}` : m2))
                         </div>
                     ` : b2`
                         <div class="flex items-center justify-center py-6 text-base-content/50 text-sm">选择对话后可回复</div>
-                    `}
-                </div>
-            </div>
-        `;
-    }
-    /* ── 右栏 ── */
-    _renderRightColumn() {
-      const conv = this._selectedConversation;
-      const item = this._conversationItem;
-      return b2`
-            <div class="conversation-column col-detail flex flex-col flex-1 min-h-0">
-                <div class="column-header card glass-card p-3 mb-2">
-                    <span class="column-title">正在咨询的宝贝</span>
-                </div>
-                <div class="column-list column-list-detail flex flex-col flex-1 min-h-0 overflow-hidden">
-                    <div class="card glass-card p-3 detail-goods-card detail-goods-card-stretch flex-1 min-h-0 flex flex-col">
-                        ${conv ? b2`
-                            ${item ? b2`
-                                <div class="flex flex-col items-center gap-3">
-                                    ${item.picUrl ? b2`<img src="${this.getItemImageUrl(item.picUrl)}" alt="" class="detail-goods-img rounded-lg object-cover border border-base-300" loading="lazy" />` : A}
-                                    <div class="detail-goods-text w-full flex flex-col items-center text-center">
-                                        <p class="text-sm font-medium break-words w-full" title="${item.title || item.id}">${item.title || "\u5546\u54C1 " + item.id}</p>
-                                        ${item.price ? b2`<p class="text-sm font-semibold text-primary mt-1">¥${item.price}</p>` : A}
-                                    </div>
-                                </div>
-                            ` : conv.item?.id ? b2`
-                                <div class="flex flex-col items-center gap-3">
-                                    <div class="detail-goods-img rounded-lg bg-base-200 flex items-center justify-center"><span class="loading loading-spinner loading-sm"></span></div>
-                                    <p class="text-sm text-base-content/50">加载中...</p>
-                                </div>
-                            ` : b2`<p class="text-sm text-base-content/50">暂无关联商品</p>`}
-                        ` : b2`
-                            <div class="flex flex-col items-center justify-center flex-1 min-h-[120px] text-base-content/50 text-sm"><p>选择对话后显示商品</p></div>
-                        `}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    /* ── 第四列：商品列表 ── */
-    _renderGoodsListColumn() {
-      return b2`
-            <div class="conversation-column col-goods-list flex flex-col flex-1 min-h-0">
-                <div class="column-header column-header-goods card glass-card p-3 mb-2">
-                    <span class="column-title">商品列表</span>
-                </div>
-                <div class="column-list column-list-goods flex flex-col flex-1 min-h-0 overflow-auto">
-                    ${!this._selectedConversation ? b2`
-                        <div class="flex flex-col items-center justify-center flex-1 min-h-[120px] text-base-content/50 text-sm px-2">
-                            <p class="text-center">请先选择对话</p>
-                            <p class="text-center text-xs mt-1">将加载该账号的商品列表</p>
-                        </div>
-                    ` : this._loadingGoodsList ? b2`
-                        <div class="flex flex-col items-center justify-center flex-1 min-h-[120px] text-base-content/50">
-                            <span class="loading loading-spinner loading-md"></span>
-                            <p class="text-sm mt-2">加载商品列表中…</p>
-                        </div>
-                    ` : this._accountGoodsList.length === 0 ? b2`
-                        <div class="flex flex-col items-center justify-center flex-1 min-h-[120px] text-base-content/50 text-sm px-2">
-                            <p class="text-center">暂无商品</p>
-                            <p class="text-center text-xs mt-1">该账号暂无在售商品</p>
-                        </div>
-                    ` : b2`
-                        <div class="flex flex-col gap-2">
-                            ${this._accountGoodsList.map((goods) => b2`
-                                <div class="goods-list-row card glass-card p-2.5 flex flex-row items-center gap-2 rounded-lg border border-base-300/50 hover:border-primary/30 transition-colors group">
-                                    <div class="w-12 h-12 rounded bg-base-200 shrink-0 flex items-center justify-center border border-base-300">
-                                        <span class="w-5 h-5 text-base-content/40" .innerHTML=${ICONS.Package}></span>
-                                    </div>
-                                    <div class="flex-1 min-w-0 flex flex-col gap-0.5">
-                                        <p class="text-sm font-medium truncate" title="${goods.title}">${goods.title || "\u5546\u54C1 " + goods.id}</p>
-                                        ${goods.price ? b2`<p class="text-xs font-semibold text-primary">¥${goods.price}</p>` : A}
-                                    </div>
-                                    <button class="btn btn-sm btn-primary goods-list-send-btn opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                        ?disabled=${this._sendingProductLinkId !== null}
-                                        @click=${() => this._sendProductLink(goods)} title="发送商品链接给买家">
-                                        ${this._sendingProductLinkId === goods.id ? b2`<span class="loading loading-spinner loading-xs"></span>` : b2`${iconHtml("Send")} 发送`}
-                                    </button>
-                                </div>
-                            `)}
-                            ${this._hasMoreGoodsList ? b2`
-                                <div class="flex justify-center py-2">
-                                    <button class="btn btn-sm btn-ghost text-base-content/60 w-full" ?disabled=${this._loadingMoreGoodsList} @click=${() => this._loadMoreGoodsList()}>
-                                        ${this._loadingMoreGoodsList ? b2`<span class="loading loading-spinner loading-xs"></span>` : "\u52A0\u8F7D\u66F4\u591A"}
-                                    </button>
-                                </div>
-                            ` : A}
-                        </div>
                     `}
                 </div>
             </div>
@@ -3176,25 +3987,7 @@ ${m2}` : m2))
   ], _ConversationLitElement.prototype, "_deletingOlderThan", 2);
   __decorateClass([
     r5()
-  ], _ConversationLitElement.prototype, "_showGoodsListColumn", 2);
-  __decorateClass([
-    r5()
   ], _ConversationLitElement.prototype, "_desktopNotificationEnabled", 2);
-  __decorateClass([
-    r5()
-  ], _ConversationLitElement.prototype, "_accountGoodsList", 2);
-  __decorateClass([
-    r5()
-  ], _ConversationLitElement.prototype, "_loadingGoodsList", 2);
-  __decorateClass([
-    r5()
-  ], _ConversationLitElement.prototype, "_sendingProductLinkId", 2);
-  __decorateClass([
-    r5()
-  ], _ConversationLitElement.prototype, "_hasMoreGoodsList", 2);
-  __decorateClass([
-    r5()
-  ], _ConversationLitElement.prototype, "_loadingMoreGoodsList", 2);
   __decorateClass([
     r5()
   ], _ConversationLitElement.prototype, "_replyText", 2);
@@ -3216,9 +4009,45 @@ ${m2}` : m2))
   __decorateClass([
     r5()
   ], _ConversationLitElement.prototype, "_messageItems", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickFolders", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickFolderFilter", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickHasUncat", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickItems", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickListLoading", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickSearch", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickSendingId", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickFolderEditMode", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickDraftName", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickDraftContent", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickEditItemId", 2);
+  __decorateClass([
+    r5()
+  ], _ConversationLitElement.prototype, "_quickSavingDraft", 2);
   var ConversationLitElement = _ConversationLitElement;
 
-  // src/lib/conversation-ui/conversation-lit.entry.ts
+  // conversation-lit/lib/conversation-ui/conversation-lit.entry.ts
   try {
     if (!customElements.get("conversation-lit-app")) {
       customElements.define("conversation-lit-app", ConversationLitElement);

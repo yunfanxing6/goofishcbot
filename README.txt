@@ -1,4 +1,4 @@
-闲鱼智能管理系统 - Linux 版本
+闲鱼智能管理系统 - Linux 版本（开源版）
 ========================================
 
 【系统要求】
@@ -55,6 +55,10 @@
 6. 查看日志（后台模式）
    tail -f logs/runtime.log
 
+7. 开机自启（可选）
+   chmod +x start-at-boot.sh
+   将 `start-at-boot.sh` 配置到 systemd、crontab 或 rc.local
+
 【文件说明】
 ├── app/                     主程序
 ├── node/                    本地打包版可选内置 Node.js（GitHub 仓库不包含）
@@ -69,6 +73,7 @@
 - 首次使用前请先安装 Node.js
 - 首次使用前请先安装 Google Chrome
 - 首次运行前请先执行 `cd app && npm install --omit=dev`
+- 已移除授权校验，可直接启动使用
 - 如需外网访问，请开放 3000 端口
 
 如有问题，请联系管理员。

@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'goofishcbot',
-    script: 'app/index.js',
+    script: 'app/open-source-launcher.mjs',
     cwd: '.',
     exec_mode: 'fork',
     instances: 1,

@@ -17,7 +17,7 @@ fi
 if command -v google-chrome-stable &>/dev/null; then
   export CHROME_PATH="/usr/bin/google-chrome-stable"
 fi
-mkdir -p data logs
+mkdir -p logs
 if [ -f "$SCRIPT_DIR/node_modules/pm2/bin/pm2" ]; then
   "$NODE_BIN" "$SCRIPT_DIR/node_modules/pm2/bin/pm2" start ecosystem.config.cjs
 else

@@ -35,7 +35,4 @@ fi
 echo "提示：按 Ctrl+C 停止程序"
 echo "访问地址：http://localhost:3000"
 echo ""
-
-mkdir -p data logs
-
-exec "$NODE_BIN" app/index.js
+exec "$NODE_BIN" app/open-source-launcher.mjs

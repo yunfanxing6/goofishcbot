@@ -17,11 +17,11 @@ if [ -z "$NODE_BIN" ]; then
   exit 1
 fi
 
-if pgrep -u "$USER" -f "$SCRIPT_DIR/app/index.js" >/dev/null; then
+if pgrep -u "$USER" -f "$SCRIPT_DIR/app/(open-source-launcher\.mjs|index\.js)" >/dev/null; then
   printf '[%s] goofishcbot already running\n' "$(date '+%F %T')" >> "$LOG_FILE"
   exit 0
 fi
 
 printf '[%s] starting goofishcbot\n' "$(date '+%F %T')" >> "$LOG_FILE"
-nohup "$NODE_BIN" "$SCRIPT_DIR/app/index.js" >> "$SCRIPT_DIR/logs/runtime.log" 2>&1 &
+nohup "$NODE_BIN" "$SCRIPT_DIR/app/open-source-launcher.mjs" >> "$SCRIPT_DIR/logs/runtime.log" 2>&1 &
 printf '[%s] start command sent\n' "$(date '+%F %T')" >> "$LOG_FILE"
